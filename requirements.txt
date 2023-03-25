@@ -1,0 +1,5 @@
+torch
+numpy
+lion_pytorch
+wandb
+tiktoken
