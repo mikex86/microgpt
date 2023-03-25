@@ -1,3 +1,4 @@
+import math
 import time
 from contextlib import nullcontext
 from dataclasses import dataclass
@@ -8,8 +9,11 @@ from torch.nn import Module
 from torch.optim import AdamW
 
 from models.moduleapi import ISparselyWeightDecayedModule
-from train import checkpointing, logging
+from train import checkpointing, logging, iterator_utils
 from train.checkpointing import CheckpointInfo
+from configure_pytorch import allow_tf32
+
+allow_tf32()
 
 
 @dataclass
@@ -19,15 +23,23 @@ class TrainingConfig:
     val_dataset_iterator: iter
 
     # Optimizer parameters
-    learning_rate: float
     weight_decay: float
     betas: Tuple[float, float]
 
+    # learning rate scheduler parameters
+    min_learning_rate: float
+    max_learning_rate: float
+    warmup_steps: int
+
     # Training loop related parameters
     batch_size: int
+    max_steps: int
     n_mini_steps: int
     evaluation_period: int
     num_evaluation_steps: int
+
+    # Gradient clipping parameters
+    grad_clip: float
 
     # Checkpointing parameters
     checkpoint_dir_path: str
@@ -37,30 +49,24 @@ class TrainingConfig:
     dtype: torch.dtype
 
 
-def make_batched_iterator(dataset_iterator: iter,
-                          batch_size: int,
-                          device: torch.device):
+def get_learning_rate(step, n_warmup_steps, n_lr_decay_steps, max_lr, min_lr):
     """
-    Takes an iterator over individual examples and returns an iterator over batches of examples.
-    If the device is of type "cuda", the yielded batches are pinned to memory and non-blocking
-    :param dataset_iterator: an infinite iterator over examples (x, y) where x and y are tensors of shape (seq_len,)
-    :param batch_size: the number of examples in each batch
-    :param device: the device on which to place the yielded batches on
-    :return: an infinite iterator over batches of examples (x, y)
-            where x and y are tensors of shape (batch_size, seq_len)
+    Calculates the learning rate for the given iteration with cosine decay
+    :param step: the current step number
+    :param n_warmup_steps: the number of iterations to warm up for
+    :param n_lr_decay_steps: the number of iterations to decay for (should be ~= max_steps according to Chinchilla)
     """
-    while True:
-        examples_x, examples_y = [], []
-        for i in range(batch_size):
-            x, y = next(dataset_iterator)
-            examples_x.append(x)
-            examples_y.append(y)
-        x, y = torch.stack(examples_x, dim=0), torch.stack(examples_y, dim=0)
-        if device.type == "cuda":
-            x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
-        else:
-            x, y = x.to(device), y.to(device)
-        yield x, y
+    # 1) linear warmup for warmup_iters steps
+    if step < n_warmup_steps:
+        return max_lr * step / n_warmup_steps
+    # 2) if it > lr_decay_iters, return min learning rate
+    if step > n_lr_decay_steps:
+        return min_lr
+    # 3) in between, use cosine decay down to min learning rate
+    decay_ratio = (step - n_warmup_steps) / (n_lr_decay_steps - n_warmup_steps)
+    assert 0 <= decay_ratio <= 1
+    coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))  # coeff ranges 0..1
+    return min_lr + coeff * (max_lr - min_lr)
 
 
 class LanguageModelTrainer:
@@ -92,10 +98,11 @@ class LanguageModelTrainer:
             ]
         self.optimizer = AdamW(
             optimizer_param_args,
-            lr=self.training_config.learning_rate,
+            lr=self.training_config.max_learning_rate,
             betas=self.training_config.betas,
             fused=device_type == "cuda"  # fused kernels are only available on CUDA
         )
+        self.scalar = torch.cuda.amp.GradScaler() if device_type == "cuda" else None
 
         # Load checkpoint if it exists
         checkpoint_info = checkpointing.get_checkpoint_info(self.training_config.checkpoint_dir_path, 'latest')
@@ -117,13 +124,28 @@ class LanguageModelTrainer:
         """
 
         # Setup dataset iterators
-        train_it = make_batched_iterator(dataset_iterator=self.training_config.train_dataset_iterator,
-                                         batch_size=self.training_config.batch_size,
-                                         device=self.training_config.device)
+        train_it = iterator_utils.prefetching_iterator(
+            iterator_utils.make_batched_iterator(dataset_iterator=self.training_config.train_dataset_iterator,
+                                                 batch_size=self.training_config.batch_size,
+                                                 device=self.training_config.device),
+            num_prefetch=10
+        )
 
         # Training loop
-        for x, y in train_it:
+        while self.current_step < self.training_config.max_steps:
+            x, y = next(train_it)
             step_start_time = time.time()
+
+            # update learning rate
+            lr = get_learning_rate(
+                step=self.current_step,
+                n_warmup_steps=self.training_config.warmup_steps,
+                n_lr_decay_steps=self.training_config.max_steps,
+                max_lr=self.training_config.max_learning_rate,
+                min_lr=self.training_config.min_learning_rate
+            )
+            for param_group in self.optimizer.param_groups:
+                param_group["lr"] = lr
 
             # iterate over mini steps
             total_loss = 0
@@ -131,12 +153,30 @@ class LanguageModelTrainer:
                 with self.autocast_ctx:
                     logits = self.model(x)
                     loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.shape[-1]), y.view(-1))
+
+                total_loss += loss.item()  # use un-scaled loss for logging
+
+                # scale loss for mixed precision training
+                if self.scalar is not None:
+                    loss = self.scalar.scale(loss)
+
                 loss.backward()
-                total_loss += loss.item()
+
+            # Gradient clipping
+            if self.training_config.grad_clip != 0.0:
+                if self.scalar is not None:
+                    self.scalar.unscale_(self.optimizer)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.training_config.grad_clip)
 
             # update parameters
             with torch.no_grad():
-                self.optimizer.step()
+                if self.scalar is not None:
+                    self.scalar.step(self.optimizer)
+                    self.scalar.update()
+                else:
+                    self.optimizer.step()
+
+                # don't just zero, but free the memory
                 self.optimizer.zero_grad(set_to_none=True)
 
             step_end_time = time.time()
@@ -169,9 +209,12 @@ class LanguageModelTrainer:
         """
         Performs evaluation of the model and returns the evaluation loss
         """
-        val_it = make_batched_iterator(dataset_iterator=self.training_config.val_dataset_iterator,
-                                       batch_size=self.training_config.batch_size,
-                                       device=self.training_config.device)
+        val_it = iterator_utils.prefetching_iterator(
+            iterator_utils.make_batched_iterator(dataset_iterator=self.training_config.val_dataset_iterator,
+                                                 batch_size=self.training_config.batch_size,
+                                                 device=self.training_config.device),
+            num_prefetch=10
+        )
 
         total_loss = 0
         for i in range(self.training_config.num_evaluation_steps):

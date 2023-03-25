@@ -35,7 +35,13 @@ def main():
         batch_size=64,
         n_mini_steps=5,
 
-        learning_rate=1e-4,
+        min_learning_rate=1e-4,
+        max_learning_rate=1e-3,
+        warmup_steps=100,
+        max_steps=5000,
+
+        grad_clip=0.0,
+
         weight_decay=1e-1,
         betas=(0.9, 0.999),
 

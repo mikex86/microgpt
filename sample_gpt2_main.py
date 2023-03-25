@@ -18,7 +18,7 @@ def main():
     tokenizer = GreedyTokenizer.from_json("datasets/shakespeare_char/vocabulary.json")
     sampler = AutoregressiveSampler(model, tokenizer)
 
-    prompt = "T"
+    prompt = "KING GEORGE"
     generated_text = sampler.generate_text(prompt, gpt2config.block_size - tokenizer.get_num_tokens(prompt))
     print(generated_text)
 
