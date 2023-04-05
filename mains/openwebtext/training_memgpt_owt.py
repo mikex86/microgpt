@@ -30,11 +30,17 @@ def download_dataset():
                 self.pbar.finish()
 
     if not os.path.exists("datasets/openwebtext_gpt2/train.bin"):
-        urlretrieve("https://micro-gpt-datasets.s3.eu-central-1.amazonaws.com/train.bin",
+        if os.name == 'nt':
+            urlretrieve("https://micro-gpt-datasets.s3.eu-central-1.amazonaws.com/train.bin",
                     "datasets/openwebtext_gpt2/train.bin", DownloadProgressBar())
+        else:
+            os.system("wget https://micro-gpt-datasets.s3.eu-central-1.amazonaws.com/train.bin -O datasets/openwebtext_gpt2/train.bin")
     if not os.path.exists("datasets/openwebtext_gpt2/val.bin"):
-        urlretrieve("https://micro-gpt-datasets.s3.eu-central-1.amazonaws.com/val.bin",
+        if os.name == 'nt':
+            urlretrieve("https://micro-gpt-datasets.s3.eu-central-1.amazonaws.com/val.bin",
                     "datasets/openwebtext_gpt2/val.bin", DownloadProgressBar())
+        else:
+            os.system("wget https://micro-gpt-datasets.s3.eu-central-1.amazonaws.com/val.bin -O datasets/openwebtext_gpt2/val.bin")
 
 
 def main():
