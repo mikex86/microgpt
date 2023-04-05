@@ -38,6 +38,17 @@ class ILanguageModel(torch.nn.Module):
         pass
 
     @abstractmethod
+    @torch.no_grad()
+    def get_eval_loss(self, x: torch.tensor, y: torch.tensor) -> float:
+        """
+        Evaluates the model on the given data
+        :param x: the input sequence
+        :param y: the target sequence
+        :return: the loss
+        """
+        pass
+
+    @abstractmethod
     def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], int]) -> None:
         """
         Generates a sequence of tokens from the given prompt

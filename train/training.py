@@ -206,7 +206,8 @@ class LanguageModelTrainer:
                 logging.log_eval_step(self.current_step, log_data)
 
                 # save checkpoint
-                self.save_checkpoint(self.current_step, eval_loss)
+                if self.current_step > 0:
+                    self.save_checkpoint(self.current_step, eval_loss)
 
             self.current_step += 1
 
@@ -226,9 +227,8 @@ class LanguageModelTrainer:
         for i in range(self.training_config.num_evaluation_steps):
             x, y = next(val_it)
             with self.autocast_ctx:
-                logits = self.model(x)
-                loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.shape[-1]), y.view(-1))
-            total_loss += loss.item()
+                loss = self.model.get_eval_loss(x)
+                total_loss += loss
 
         return total_loss / self.training_config.num_evaluation_steps
 

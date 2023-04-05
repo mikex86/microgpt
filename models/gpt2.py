@@ -202,6 +202,18 @@ class Gpt2Model(ISparselyWeightDecayedModule, ILanguageModel):
 
         return unscaled_loss
 
+    @torch.no_grad()
+    def get_eval_loss(self, x: torch.tensor, y: torch.tensor) -> float:
+        self.eval()
+        logits = self(x)
+        loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+        loss_item = loss.item()
+
+        del logits
+        del loss
+
+        return loss_item
+
 
 class Gpt2Tokenizer(Tokenizer):
 
