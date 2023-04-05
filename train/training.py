@@ -227,7 +227,7 @@ class LanguageModelTrainer:
         for i in range(self.training_config.num_evaluation_steps):
             x, y = next(val_it)
             with self.autocast_ctx:
-                loss = self.model.get_eval_loss(x)
+                loss = self.model.get_eval_loss(x, y)
                 total_loss += loss
 
         return total_loss / self.training_config.num_evaluation_steps
