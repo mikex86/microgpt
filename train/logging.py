@@ -6,14 +6,28 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from train.checkpointing import CheckpointInfo
 
-LOG_TO_CONSOLE = True
-LOG_TO_WANDB = os.getenv("LOG_WANDB") is not None
+LOG_PROJECT_NAME = "lmtest"
 
-if LOG_TO_WANDB:
-    wandb.init(project="tinygpt", entity="mikex86")
+
+def set_log_project_name(name: str):
+    global LOG_PROJECT_NAME
+    LOG_PROJECT_NAME = name
+
+
+LOG_TO_CONSOLE = True
+LOG_TO_WANDB = os.getenv("LOG_WANDB") == "1"
+__initialized = False
+
+
+def __init_wandb():
+    global __initialized
+    if not __initialized:
+        wandb.init(project=LOG_PROJECT_NAME)
+        __initialized = True
 
 
 def log_train_step(step: int, step_ms: float, data_dict: dict):
+    __init_wandb()
     if LOG_TO_CONSOLE:
         print(f"Step {step} took {step_ms:.3f}ms: {data_dict}")
 
@@ -24,6 +38,7 @@ def log_train_step(step: int, step_ms: float, data_dict: dict):
 
 
 def log_eval_step(step: int, data_dict: dict):
+    __init_wandb()
     eval_loss = data_dict["loss/val"]
     if LOG_TO_CONSOLE:
         print(f"Eval after step {step}: loss/val = {eval_loss}")

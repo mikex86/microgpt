@@ -9,7 +9,8 @@ from torch.nn import Module
 from torch.optim import AdamW
 
 from models.moduleapi import ISparselyWeightDecayedModule
-from train import checkpointing, logging, iterator_utils
+from train import checkpointing, logging
+from utils import iterator_utils
 from train.checkpointing import CheckpointInfo
 from configure_pytorch import allow_tf32
 
@@ -47,6 +48,12 @@ class TrainingConfig:
     # Miscellaneous parameters
     device: torch.device
     dtype: torch.dtype
+
+    """
+    Whether to delete loss and dependent tensors between mini steps.
+    Empties the cuda cache if device is cuda.
+    """
+    hyper_save_memory: bool = False
 
 
 def get_learning_rate(step, n_warmup_steps, n_lr_decay_steps, max_lr, min_lr):
@@ -125,11 +132,18 @@ class LanguageModelTrainer:
 
         # Setup dataset iterators
         train_it = iterator_utils.prefetching_iterator(
-            iterator_utils.make_batched_iterator(dataset_iterator=self.training_config.train_dataset_iterator,
-                                                 batch_size=self.training_config.batch_size,
-                                                 device=self.training_config.device),
+            iterator_utils.make_batched_iterator(
+                dataset_iterator=self.training_config.train_dataset_iterator,
+                batch_size=self.training_config.batch_size,
+                device=self.training_config.device
+            ),
             num_prefetch=10
         )
+
+        # Free as much memory as possible before entering the training loop
+        self.optimizer.zero_grad(set_to_none=True)
+        if self.training_config.device.type == "cuda":
+            torch.cuda.empty_cache()
 
         # Training loop
         while self.current_step < self.training_config.max_steps:
@@ -161,6 +175,13 @@ class LanguageModelTrainer:
                     loss = self.scalar.scale(loss)
 
                 loss.backward()
+
+                # free all memory between mini steps to avoid OOM
+                del logits
+                del loss
+
+                if self.training_config.hyper_save_memory and self.training_config.device.type == "cuda":
+                    torch.cuda.empty_cache()
 
             # Gradient clipping
             if self.training_config.grad_clip != 0.0:

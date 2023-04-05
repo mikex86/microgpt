@@ -1,11 +1,11 @@
-from typing import List
+from typing import List, Callable
 
 import torch.nn
 from dataclasses import dataclass
 
 from torch import nn
 
-from models.moduleapi import ISparselyWeightDecayedModule, WeightDecayGroups
+from models.moduleapi import ISparselyWeightDecayedModule, WeightDecayGroups, ILanguageModel
 from tokenization.tokenizer import Tokenizer
 import tiktoken
 
@@ -110,7 +110,7 @@ class Gpt2Block(torch.nn.Module):
         return x
 
 
-class Gpt2Model(ISparselyWeightDecayedModule):
+class Gpt2Model(ISparselyWeightDecayedModule, ILanguageModel):
 
     def __init__(self, config: Gpt2Config):
         super().__init__()
@@ -142,6 +142,20 @@ class Gpt2Model(ISparselyWeightDecayedModule):
 
         x = self.ln_f(x)
         return self.lm_head(x)
+
+    def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], int]) -> None:
+        self.eval()
+        device = next(self.parameters()).device
+        tokens = prompt.copy()
+        with torch.no_grad():
+            for _ in range(n_tokens):
+                tokens = tokens[-self.config.block_size:]  # crop to block size
+                tokens_tensor = torch.tensor(tokens, dtype=torch.long, device=device).unsqueeze(0)
+                logits = self(tokens_tensor)
+                logits = logits[0, -1, :]
+                token = callback(logits)
+                tokens.append(token)
+        self.train()
 
     def get_weight_decay_groups(self) -> WeightDecayGroups:
         all_modules = list(self.named_modules())

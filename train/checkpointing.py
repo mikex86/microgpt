@@ -4,7 +4,7 @@ import json
 from typing import Optional
 
 import torch
-from torch.nn import Module
+from torch.nn import Module, Parameter
 from torch.optim import Optimizer
 
 
@@ -54,6 +54,9 @@ def _load_checkpoint(model: Module, optimizer: Optional[Optimizer], checkpoint_d
     model.load_state_dict(checkpoint["model_state_dict"])
     if optimizer is not None:
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    del checkpoint
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def load_checkpoint(model: Module, optimizer: Optional[Optimizer], checkpoint_dir_path: str, checkpoint_name: str):
