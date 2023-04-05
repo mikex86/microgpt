@@ -109,7 +109,9 @@ class LanguageModelTrainer:
             betas=self.training_config.betas,
             fused=device_type == "cuda"  # fused kernels are only available on CUDA
         )
-        self.scalar = torch.cuda.amp.GradScaler() if device_type == "cuda" else None
+
+        is_mixed_precision = self.model.dtype == torch.float32 and self.training_config.dtype == torch.float16
+        self.scalar = torch.cuda.amp.GradScaler() if device_type == "cuda" and is_mixed_precision else None
 
         # Load checkpoint if it exists
         checkpoint_info = checkpointing.get_checkpoint_info(self.training_config.checkpoint_dir_path, 'latest')
@@ -239,7 +241,7 @@ class LanguageModelTrainer:
         :param step: the current step of training
         :param eval_loss: the loss scored during evaluation. Used to determine if the current checkpoint is the best
         """
-        best_info = checkpointing.get_checkpoint_info(self.training_config.checkpoint_dir_path, "best")
+        # best_info = checkpointing.get_checkpoint_info(self.training_config.checkpoint_dir_path, "best")
         current_info = CheckpointInfo(step=step, val_loss=eval_loss)
 
         # save latest checkpoint
@@ -248,13 +250,13 @@ class LanguageModelTrainer:
                                       self.training_config.checkpoint_dir_path, "latest",
                                       current_info)
 
-        if best_info is not None and best_info.val_loss < eval_loss:
-            return
-
-        # save best checkpoint
-        checkpointing.save_checkpoint(self.model, self.optimizer,
-                                      self.training_config.checkpoint_dir_path, "best",
-                                      current_info)
+        # if best_info is not None and best_info.val_loss < eval_loss:
+        #     return
+        #
+        # # save best checkpoint
+        # checkpointing.save_checkpoint(self.model, self.optimizer,
+        #                               self.training_config.checkpoint_dir_path, "best",
+        #                               current_info)
         end_time = time.time()
 
         logging.log_save_checkpoint(current_info, end_time - start_time)

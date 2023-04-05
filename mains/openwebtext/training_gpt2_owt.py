@@ -3,7 +3,7 @@ import os
 import torch
 import numpy as np
 
-from models.memgpt import MemGptModel, MemGptConfig
+from models.gpt2 import Gpt2Model, Gpt2Config
 from train.logging import set_log_project_name
 from train.training import TrainingConfig, LanguageModelTrainer
 from data.dataset import BinaryTokenDataset
@@ -48,24 +48,23 @@ def main():
 
     download_dataset()
 
-    memgpt_config = MemGptConfig(
+    gpt_config = Gpt2Config(
         block_size=512,
-        n_windows=1,
-        n_layers=6,
-        n_heads=4,
-        n_embd=384,
+        n_layers=8,
+        n_heads=8,
+        n_embd=1024,
         device=device,
-        dtype=torch.float16,
+        dtype=torch.float32,
     )
 
     train_ds = BinaryTokenDataset(
         "datasets/openwebtext_gpt2/train.bin",
-        memgpt_config.block_size * memgpt_config.n_windows,
+        gpt_config.block_size,
         np.dtype(np.uint16)
     )
     val_ds = BinaryTokenDataset(
         "datasets/openwebtext_gpt2/val.bin",
-        memgpt_config.block_size * memgpt_config.n_windows,
+        gpt_config.block_size,
         np.dtype(np.uint16)
     )
 
@@ -73,8 +72,8 @@ def main():
         train_dataset_iterator=iter(train_ds),
         val_dataset_iterator=iter(val_ds),
 
-        batch_size=8,
-        n_mini_steps=1,
+        batch_size=2,
+        n_mini_steps=2,
 
         min_learning_rate=1e-7,
         max_learning_rate=1e-5,
@@ -92,11 +91,11 @@ def main():
         evaluation_period=50,
         num_evaluation_steps=12,
 
-        checkpoint_dir_path="checkpoints/owt/memgpt_checkpoints",
+        checkpoint_dir_path="checkpoints/owt/gpt2_checkpoints",
 
         hyper_save_memory=False
     )
-    model = MemGptModel(memgpt_config)
+    model = Gpt2Model(gpt_config)
     trainer = LanguageModelTrainer(model, training_config)
     trainer.train()
 

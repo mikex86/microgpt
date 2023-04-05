@@ -13,6 +13,8 @@ import tiktoken
 
 @dataclass
 class Gpt2Config:
+    device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    dtype: torch.dtype = torch.float32
     block_size: int = 1024
     vocab_size: int = 50304  # GPT-2 vocab_size of 50257, padded up to the nearest multiple of 64 for efficiency
     n_layers: int = 12
@@ -24,10 +26,10 @@ class Gpt2Config:
 
 class Gpt2LayerNorm(torch.nn.Module):
 
-    def __init__(self, ndim: int, bias: bool = True):
+    def __init__(self, ndim: int, bias: bool, device: torch.device, dtype: torch.dtype):
         super().__init__()
-        self.weight = torch.nn.Parameter(torch.ones(ndim))
-        self.bias = torch.nn.Parameter(torch.zeros(ndim)) if bias else None
+        self.weight = torch.nn.Parameter(torch.ones(ndim, device=device, dtype=dtype))
+        self.bias = torch.nn.Parameter(torch.zeros(ndim, device=device, dtype=dtype)) if bias else None
 
     def forward(self, x):
         return torch.nn.functional.layer_norm(x, self.weight.shape, self.weight, self.bias, eps=1e-5)
@@ -40,10 +42,10 @@ class Gpt2CausalSelfAttention(torch.nn.Module):
         assert config.n_embd % config.n_heads == 0
 
         # key, query, value projections for all heads
-        self.c_attn = torch.nn.Linear(config.n_embd, config.n_embd * 3, bias=config.bias)
+        self.c_attn = torch.nn.Linear(config.n_embd, config.n_embd * 3, bias=config.bias, device=config.device, dtype=config.dtype)
 
         # output projection
-        self.c_proj = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.c_proj = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
 
         # regularization
         self.attn_drop = torch.nn.Dropout(config.dropout)
@@ -84,8 +86,8 @@ class Gpt2MLP(torch.nn.Module):
 
     def __init__(self, config: Gpt2Config):
         super().__init__()
-        self.c_fc = torch.nn.Linear(config.n_embd, config.n_embd * 4, bias=config.bias)
-        self.c_proj = torch.nn.Linear(config.n_embd * 4, config.n_embd, bias=config.bias)
+        self.c_fc = torch.nn.Linear(config.n_embd, config.n_embd * 4, bias=config.bias, device=config.device, dtype=config.dtype)
+        self.c_proj = torch.nn.Linear(config.n_embd * 4, config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
         self.act = torch.nn.GELU()
         self.drop = torch.nn.Dropout(config.dropout)
 
@@ -100,9 +102,9 @@ class Gpt2Block(torch.nn.Module):
     def __init__(self, config: Gpt2Config):
         super().__init__()
 
-        self.ln_1 = Gpt2LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_1 = Gpt2LayerNorm(config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
         self.attn = Gpt2CausalSelfAttention(config)
-        self.ln_2 = Gpt2LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_2 = Gpt2LayerNorm(config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
         self.mlp = Gpt2MLP(config)
 
     def forward(self, x):
@@ -117,13 +119,13 @@ class Gpt2Model(ISparselyWeightDecayedModule, ILanguageModel):
         super().__init__()
 
         self.config = config
-        self.wte = nn.Embedding(config.vocab_size, config.n_embd)
-        self.wpe = nn.Embedding(config.block_size, config.n_embd)
+        self.wte = nn.Embedding(config.vocab_size, config.n_embd, dtype=config.dtype, device=config.device)
+        self.wpe = nn.Embedding(config.block_size, config.n_embd, dtype=config.dtype, device=config.device)
         self.drop = nn.Dropout(config.dropout)
         self.blocks = nn.ModuleList([Gpt2Block(config) for _ in range(config.n_layers)])
-        self.ln_f = Gpt2LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_f = Gpt2LayerNorm(config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
 
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=config.bias)
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=config.bias, device=config.device, dtype=config.dtype)
 
     def forward(self, x):
         b, t = x.size()
@@ -213,6 +215,10 @@ class Gpt2Model(ISparselyWeightDecayedModule, ILanguageModel):
         del loss
 
         return loss_item
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.config.dtype
 
 
 class Gpt2Tokenizer(Tokenizer):

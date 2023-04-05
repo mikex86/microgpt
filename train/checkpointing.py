@@ -38,10 +38,14 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
     with open(checkpoint_info_file_path, "w") as f:
         json.dump(checkpoint_info.__dict__, f)
 
-    checkpoint_file = os.path.join(checkpoint_dir_path, "checkpoint.pt")
+    checkpoint_file = os.path.join(checkpoint_dir_path, "checkpoint.model.pt")
     torch.save({
         "model_state_dict": model_state,
-        "optimizer_state_dict": optimizer_state
+    }, checkpoint_file)
+
+    checkpoint_file = os.path.join(checkpoint_dir_path, "checkpoint.optimizer.pt")
+    torch.save({
+        "optimizer_state_dict": optimizer_state,
     }, checkpoint_file)
 
 
@@ -51,14 +55,19 @@ def save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: st
 
 
 def _load_checkpoint(model: Module, optimizer: Optional[Optimizer], checkpoint_dir_path: str):
-    model_device = next(model.parameters()).device  # hack to get the device of the model
+    model_checkpoint_file = os.path.join(checkpoint_dir_path, "checkpoint.model.pt")
 
-    checkpoint_file = os.path.join(checkpoint_dir_path, "checkpoint.pt")
-    checkpoint = torch.load(checkpoint_file, map_location=model_device)
-    model.load_state_dict(checkpoint["model_state_dict"])
+    model_checkpoint = torch.load(model_checkpoint_file, map_location='cpu')
+    model.load_state_dict(model_checkpoint["model_state_dict"])
+
     if optimizer is not None:
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-    del checkpoint
+        device = next(model.parameters()).device  # hack to get the device of the model
+        optimizer_checkpoint_file = os.path.join(checkpoint_dir_path, "checkpoint.optimizer.pt")
+        optimizer_checkpoint = torch.load(optimizer_checkpoint_file, map_location=device)
+        optimizer.load_state_dict(optimizer_checkpoint["optimizer_state_dict"])
+        del optimizer_checkpoint
+
+    del model_checkpoint
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 

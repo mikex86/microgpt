@@ -21,14 +21,15 @@ class MemGptConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True  # True: bias in Linear layers and LayerNorms, like GPT-2. False: a bit better and faster
+    dtype: torch.dtype = torch.float32
 
 
 class MemGptLayerNorm(torch.nn.Module):
 
-    def __init__(self, ndim: int, bias: bool, device: torch.device):
+    def __init__(self, ndim: int, bias: bool, device: torch.device, dtype: torch.dtype):
         super().__init__()
-        self.weight = torch.nn.Parameter(torch.ones(ndim, device=device))
-        self.bias = torch.nn.Parameter(torch.zeros(ndim, device=device)) if bias else None
+        self.weight = torch.nn.Parameter(torch.ones(ndim, device=device, dtype=dtype))
+        self.bias = torch.nn.Parameter(torch.zeros(ndim, device=device, dtype=dtype)) if bias else None
 
     def forward(self, x):
         return torch.nn.functional.layer_norm(x, self.weight.shape, self.weight, self.bias, eps=1e-5)
@@ -43,13 +44,19 @@ class MemGptTemporalCrossAttention(torch.nn.Module):
         assert config.n_embd % config.n_heads == 0
 
         # query, value projections for all heads
-        self.now_key_enc = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias, device=config.device)
+        self.now_key_enc = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias,
+                                           device=config.device,
+                                           dtype=config.dtype)
 
         # key, value projection for prev x
-        self.c_attn_prev = torch.nn.Linear(config.n_embd, config.n_embd * 2, bias=config.bias, device=config.device)
+        self.c_attn_prev = torch.nn.Linear(config.n_embd, config.n_embd * 2, bias=config.bias,
+                                           device=config.device,
+                                           dtype=config.dtype)
 
         # output projection
-        self.c_proj = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias, device=config.device)
+        self.c_proj = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias,
+                                      device=config.device,
+                                      dtype=config.dtype)
 
         # regularization
         self.attn_drop = torch.nn.Dropout(config.dropout)
@@ -112,10 +119,14 @@ class MemGptCausalSelfAttention(torch.nn.Module):
         assert config.n_embd % config.n_heads == 0
 
         # key, query, value projections for all heads
-        self.c_attn = torch.nn.Linear(config.n_embd, config.n_embd * 3, bias=config.bias, device=config.device)
+        self.c_attn = torch.nn.Linear(config.n_embd, config.n_embd * 3, bias=config.bias,
+                                      device=config.device,
+                                      dtype=config.dtype)
 
         # output projection
-        self.c_proj = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias, device=config.device)
+        self.c_proj = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias,
+                                      device=config.device,
+                                      dtype=config.dtype)
 
         # regularization
         self.attn_drop = torch.nn.Dropout(config.dropout)
@@ -156,8 +167,12 @@ class MemGptMLP(torch.nn.Module):
 
     def __init__(self, config: MemGptConfig):
         super().__init__()
-        self.c_fc = torch.nn.Linear(config.n_embd, config.n_embd * 4, bias=config.bias, device=config.device)
-        self.c_proj = torch.nn.Linear(config.n_embd * 4, config.n_embd, bias=config.bias, device=config.device)
+        self.c_fc = torch.nn.Linear(config.n_embd, config.n_embd * 4, bias=config.bias,
+                                    device=config.device,
+                                    dtype=config.dtype)
+        self.c_proj = torch.nn.Linear(config.n_embd * 4, config.n_embd, bias=config.bias,
+                                      device=config.device,
+                                      dtype=config.dtype)
         self.act = torch.nn.GELU()
         self.drop = torch.nn.Dropout(config.dropout)
 
@@ -172,12 +187,12 @@ class MemGptCrossTemporalBlock(torch.nn.Module):
     def __init__(self, config: MemGptConfig):
         super().__init__()
 
-        self.ln_11 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device)
-        self.ln_12 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device)
+        self.ln_11 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
+        self.ln_12 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
         self.attn_1 = MemGptTemporalCrossAttention(config)
 
-        self.ln_21 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device)
-        self.ln_22 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device)
+        self.ln_21 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
+        self.ln_22 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
         self.mlp = MemGptMLP(config)
 
     def forward(self, x, prev_x):
@@ -191,9 +206,9 @@ class MemGptDefaultBlock(torch.nn.Module):
     def __init__(self, config: MemGptConfig):
         super().__init__()
 
-        self.ln_1 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device)
+        self.ln_1 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
         self.attn = MemGptCausalSelfAttention(config)
-        self.ln_2 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device)
+        self.ln_2 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
         self.mlp = MemGptMLP(config)
 
     def forward(self, x, _):
@@ -210,21 +225,25 @@ class MemGptModel(ISparselyWeightDecayedModule, ILanguageModel):
         self.config = config
 
         self.init_prev_layer_acts = torch.nn.ParameterList([
-            torch.nn.Parameter(torch.randn(1, config.block_size, config.n_embd, device=config.device))
+            torch.nn.Parameter(
+                torch.randn(1, config.block_size, config.n_embd, device=config.device, dtype=config.dtype)
+            )
             for _ in range(config.n_layers)
         ])
 
-        self.wte = nn.Embedding(config.vocab_size, config.n_embd, device=config.device)
-        self.wpe = nn.Embedding(config.block_size, config.n_embd, device=config.device)
-        self.bwpe = nn.Embedding(config.n_windows, config.n_embd, device=config.device)
+        self.wte = nn.Embedding(config.vocab_size, config.n_embd, device=config.device, dtype=config.dtype)
+        self.wpe = nn.Embedding(config.block_size, config.n_embd, device=config.device, dtype=config.dtype)
+        self.bwpe = nn.Embedding(config.n_windows, config.n_embd, device=config.device, dtype=config.dtype)
         self.drop = nn.Dropout(config.dropout)
         self.blocks = nn.ModuleList([
             MemGptDefaultBlock(config) if i % 2 == 0 else MemGptCrossTemporalBlock(config)
             for i in range(config.n_layers)
         ])
-        self.ln_f = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device)
+        self.ln_f = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
 
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=config.bias, device=config.device)
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=config.bias,
+                                 device=config.device,
+                                 dtype=config.dtype)
 
     def forward(self, x):
         b, t = x.size()
@@ -498,3 +517,7 @@ class MemGptModel(ISparselyWeightDecayedModule, ILanguageModel):
             weight_decay_params=weight_decay_params,
             no_weight_decay_params=no_weight_decay_params
         )
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.config.dtype

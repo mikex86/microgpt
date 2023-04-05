@@ -59,3 +59,8 @@ class ILanguageModel(torch.nn.Module):
         :return: the generated sequence of tokens
         """
         pass
+
+    @property
+    @abstractmethod
+    def dtype(self) -> torch.dtype:
+        pass
