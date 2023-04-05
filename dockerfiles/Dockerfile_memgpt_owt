@@ -1,0 +1,12 @@
+FROM pytorch/pytorch:2.0.0-cuda11.7-cudnn8-devel
+
+# Install dependencies
+RUN pip install --upgrade pip
+RUN pip install wandb tiktoken tqdm datasets
+
+# Copy files
+COPY . /workspace
+
+# Run training
+WORKDIR /workspace
+CMD ["python", "mains/openwebtext/training_memgpt_owt.py"]

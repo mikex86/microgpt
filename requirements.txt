@@ -3,3 +3,6 @@ numpy
 lion_pytorch
 wandb
 tiktoken
+tqdm
+datasets
+progressbar
