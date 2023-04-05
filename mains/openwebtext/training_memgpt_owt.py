@@ -53,7 +53,8 @@ def main():
         n_windows=8,
         n_layers=6,
         n_heads=4,
-        n_embd=256
+        n_embd=256,
+        device=device,
     )
 
     train_ds = BinaryTokenDataset(

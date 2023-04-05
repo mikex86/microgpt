@@ -11,6 +11,7 @@ from models.moduleapi import ISparselyWeightDecayedModule, WeightDecayGroups, IL
 
 @dataclass
 class MemGptConfig:
+    device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     block_size: int = 1024
     n_windows: int = 4
     vocab_size: int = 50304  # GPT-2 vocab_size of 50257, padded up to the nearest multiple of 64 for efficiency
@@ -23,10 +24,10 @@ class MemGptConfig:
 
 class MemGptLayerNorm(torch.nn.Module):
 
-    def __init__(self, ndim: int, bias: bool = True):
+    def __init__(self, ndim: int, bias: bool, device: torch.device):
         super().__init__()
-        self.weight = torch.nn.Parameter(torch.ones(ndim))
-        self.bias = torch.nn.Parameter(torch.zeros(ndim)) if bias else None
+        self.weight = torch.nn.Parameter(torch.ones(ndim, device=device))
+        self.bias = torch.nn.Parameter(torch.zeros(ndim, device=device)) if bias else None
 
     def forward(self, x):
         return torch.nn.functional.layer_norm(x, self.weight.shape, self.weight, self.bias, eps=1e-5)
@@ -41,13 +42,13 @@ class MemGptTemporalCrossAttention(torch.nn.Module):
         assert config.n_embd % config.n_heads == 0
 
         # query, value projections for all heads
-        self.now_key_enc = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.now_key_enc = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias, device=config.device)
 
         # key, value projection for prev x
-        self.c_attn_prev = torch.nn.Linear(config.n_embd, config.n_embd * 2, bias=config.bias)
+        self.c_attn_prev = torch.nn.Linear(config.n_embd, config.n_embd * 2, bias=config.bias, device=config.device)
 
         # output projection
-        self.c_proj = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.c_proj = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias, device=config.device)
 
         # regularization
         self.attn_drop = torch.nn.Dropout(config.dropout)
@@ -110,10 +111,10 @@ class MemGptCausalSelfAttention(torch.nn.Module):
         assert config.n_embd % config.n_heads == 0
 
         # key, query, value projections for all heads
-        self.c_attn = torch.nn.Linear(config.n_embd, config.n_embd * 3, bias=config.bias)
+        self.c_attn = torch.nn.Linear(config.n_embd, config.n_embd * 3, bias=config.bias, device=config.device)
 
         # output projection
-        self.c_proj = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.c_proj = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias, device=config.device)
 
         # regularization
         self.attn_drop = torch.nn.Dropout(config.dropout)
@@ -154,8 +155,8 @@ class MemGptMLP(torch.nn.Module):
 
     def __init__(self, config: MemGptConfig):
         super().__init__()
-        self.c_fc = torch.nn.Linear(config.n_embd, config.n_embd * 4, bias=config.bias)
-        self.c_proj = torch.nn.Linear(config.n_embd * 4, config.n_embd, bias=config.bias)
+        self.c_fc = torch.nn.Linear(config.n_embd, config.n_embd * 4, bias=config.bias, device=config.device)
+        self.c_proj = torch.nn.Linear(config.n_embd * 4, config.n_embd, bias=config.bias, device=config.device)
         self.act = torch.nn.GELU()
         self.drop = torch.nn.Dropout(config.dropout)
 
@@ -170,12 +171,12 @@ class MemGptCrossTemporalBlock(torch.nn.Module):
     def __init__(self, config: MemGptConfig):
         super().__init__()
 
-        self.ln_11 = MemGptLayerNorm(config.n_embd, bias=config.bias)
-        self.ln_12 = MemGptLayerNorm(config.n_embd, bias=config.bias)
+        self.ln_11 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device)
+        self.ln_12 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device)
         self.attn_1 = MemGptTemporalCrossAttention(config)
 
-        self.ln_21 = MemGptLayerNorm(config.n_embd, bias=config.bias)
-        self.ln_22 = MemGptLayerNorm(config.n_embd, bias=config.bias)
+        self.ln_21 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device)
+        self.ln_22 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device)
         self.mlp = MemGptMLP(config)
 
     def forward(self, x, prev_x):
@@ -189,9 +190,9 @@ class MemGptDefaultBlock(torch.nn.Module):
     def __init__(self, config: MemGptConfig):
         super().__init__()
 
-        self.ln_1 = MemGptLayerNorm(config.n_embd, bias=config.bias)
+        self.ln_1 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device)
         self.attn = MemGptCausalSelfAttention(config)
-        self.ln_2 = MemGptLayerNorm(config.n_embd, bias=config.bias)
+        self.ln_2 = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device)
         self.mlp = MemGptMLP(config)
 
     def forward(self, x, _):
@@ -208,21 +209,21 @@ class MemGptModel(ISparselyWeightDecayedModule, ILanguageModel):
         self.config = config
 
         self.init_prev_layer_acts = torch.nn.ParameterList([
-            torch.nn.Parameter(torch.randn(1, config.block_size, config.n_embd))
+            torch.nn.Parameter(torch.randn(1, config.block_size, config.n_embd, device=config.device))
             for _ in range(config.n_layers)
         ])
 
-        self.wte = nn.Embedding(config.vocab_size, config.n_embd)
-        self.wpe = nn.Embedding(config.block_size, config.n_embd)
-        self.bwpe = nn.Embedding(config.n_windows, config.n_embd)
+        self.wte = nn.Embedding(config.vocab_size, config.n_embd, device=config.device)
+        self.wpe = nn.Embedding(config.block_size, config.n_embd, device=config.device)
+        self.bwpe = nn.Embedding(config.n_windows, config.n_embd, device=config.device)
         self.drop = nn.Dropout(config.dropout)
         self.blocks = nn.ModuleList([
             MemGptDefaultBlock(config) if i % 2 == 0 else MemGptCrossTemporalBlock(config)
             for i in range(config.n_layers)
         ])
-        self.ln_f = MemGptLayerNorm(config.n_embd, bias=config.bias)
+        self.ln_f = MemGptLayerNorm(config.n_embd, bias=config.bias, device=config.device)
 
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=config.bias)
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=config.bias, device=config.device)
 
     def forward(self, x):
         b, t = x.size()
