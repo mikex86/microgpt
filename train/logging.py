@@ -20,6 +20,8 @@ __initialized = False
 
 
 def __init_wandb():
+    if not LOG_TO_WANDB:
+        return
     global __initialized
     if not __initialized:
         wandb.init(project=LOG_PROJECT_NAME)
