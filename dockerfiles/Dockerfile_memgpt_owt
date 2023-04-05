@@ -1,8 +1,8 @@
 FROM pytorch/pytorch:2.0.0-cuda11.7-cudnn8-devel
 
 # Install dependencies
-RUN pip install --upgrade pip
-RUN pip install wandb tiktoken tqdm datasets
+RUN pip install --upgrade pip --no-cache-dir
+RUN pip install wandb tqdm --no-cache-dir
 
 # Copy files
 COPY . /workspace
