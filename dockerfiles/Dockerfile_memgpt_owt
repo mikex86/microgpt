@@ -9,4 +9,5 @@ COPY . /workspace
 
 # Run training
 WORKDIR /workspace
+ENV PYTHONPATH=/workspace
 CMD ["python", "mains/openwebtext/training_memgpt_owt.py"]
