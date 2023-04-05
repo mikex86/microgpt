@@ -3,50 +3,19 @@ import os
 import torch
 import numpy as np
 
+from datasethelpers import owtdataset
 from models.memgpt import MemGptModel, MemGptConfig
 from train.logging import set_log_project_name
 from train.training import TrainingConfig, LanguageModelTrainer
 from data.dataset import BinaryTokenDataset
-from urllib.request import urlretrieve
-import progressbar
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-def download_dataset():
-    class DownloadProgressBar:
-        def __init__(self):
-            self.pbar = None
-
-        def __call__(self, block_num, block_size, total_size):
-            if not self.pbar:
-                self.pbar = progressbar.ProgressBar(maxval=total_size)
-                self.pbar.start()
-
-            downloaded = block_num * block_size
-            if downloaded < total_size:
-                self.pbar.update(downloaded)
-            else:
-                self.pbar.finish()
-
-    if not os.path.exists("datasets/openwebtext_gpt2/train.bin"):
-        if os.name == 'nt':
-            urlretrieve("https://micro-gpt-datasets.s3.eu-central-1.amazonaws.com/train.bin",
-                    "datasets/openwebtext_gpt2/train.bin", DownloadProgressBar())
-        else:
-            os.system("wget https://micro-gpt-datasets.s3.eu-central-1.amazonaws.com/train.bin -O datasets/openwebtext_gpt2/train.bin")
-    if not os.path.exists("datasets/openwebtext_gpt2/val.bin"):
-        if os.name == 'nt':
-            urlretrieve("https://micro-gpt-datasets.s3.eu-central-1.amazonaws.com/val.bin",
-                    "datasets/openwebtext_gpt2/val.bin", DownloadProgressBar())
-        else:
-            os.system("wget https://micro-gpt-datasets.s3.eu-central-1.amazonaws.com/val.bin -O datasets/openwebtext_gpt2/val.bin")
 
 
 def main():
     set_log_project_name("memgpt-owt")
 
-    download_dataset()
+    owtdataset.download_dataset()
 
     memgpt_config = MemGptConfig(
         block_size=512,

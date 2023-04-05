@@ -3,56 +3,25 @@ import os
 import torch
 import numpy as np
 
+from datasethelpers import owtdataset
 from models.gpt2 import Gpt2Model, Gpt2Config
 from train.logging import set_log_project_name
 from train.training import TrainingConfig, LanguageModelTrainer
 from data.dataset import BinaryTokenDataset
-from urllib.request import urlretrieve
-import progressbar
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-def download_dataset():
-    class DownloadProgressBar:
-        def __init__(self):
-            self.pbar = None
-
-        def __call__(self, block_num, block_size, total_size):
-            if not self.pbar:
-                self.pbar = progressbar.ProgressBar(maxval=total_size)
-                self.pbar.start()
-
-            downloaded = block_num * block_size
-            if downloaded < total_size:
-                self.pbar.update(downloaded)
-            else:
-                self.pbar.finish()
-
-    if not os.path.exists("datasets/openwebtext_gpt2/train.bin"):
-        if os.name == 'nt':
-            urlretrieve("https://micro-gpt-datasets.s3.eu-central-1.amazonaws.com/train.bin",
-                    "datasets/openwebtext_gpt2/train.bin", DownloadProgressBar())
-        else:
-            os.system("wget https://micro-gpt-datasets.s3.eu-central-1.amazonaws.com/train.bin -O datasets/openwebtext_gpt2/train.bin")
-    if not os.path.exists("datasets/openwebtext_gpt2/val.bin"):
-        if os.name == 'nt':
-            urlretrieve("https://micro-gpt-datasets.s3.eu-central-1.amazonaws.com/val.bin",
-                    "datasets/openwebtext_gpt2/val.bin", DownloadProgressBar())
-        else:
-            os.system("wget https://micro-gpt-datasets.s3.eu-central-1.amazonaws.com/val.bin -O datasets/openwebtext_gpt2/val.bin")
 
 
 def main():
     set_log_project_name("memgpt-owt")
 
-    download_dataset()
+    owtdataset.download_dataset()
 
     gpt_config = Gpt2Config(
-        block_size=512,
-        n_layers=8,
-        n_heads=8,
-        n_embd=1024,
+        block_size=1024,
+        n_layers=12,
+        n_heads=12,
+        n_embd=768,
         device=device,
         dtype=torch.float32,
     )
@@ -72,15 +41,15 @@ def main():
         train_dataset_iterator=iter(train_ds),
         val_dataset_iterator=iter(val_ds),
 
-        batch_size=2,
-        n_mini_steps=2,
+        batch_size=3,
+        n_mini_steps=5,
 
-        min_learning_rate=1e-7,
-        max_learning_rate=1e-5,
+        min_learning_rate=6e-6,
+        max_learning_rate=6e-4,
         warmup_steps=100,
         max_steps=5000,
 
-        grad_clip=0.001,
+        grad_clip=1.0,
 
         weight_decay=1e-1,
         betas=(0.9, 0.999),
