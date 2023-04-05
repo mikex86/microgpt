@@ -48,6 +48,9 @@ def log_eval_step(step: int, data_dict: dict):
         wandb.log(data_dict)
 
 
-def log_save_checkpoint(checkpoint_info: 'CheckpointInfo'):
+def log_save_checkpoint(checkpoint_info: 'CheckpointInfo', saving_time_seconds: float):
     if LOG_TO_CONSOLE:
-        print(f"Saved checkpoint at step {checkpoint_info.step} with loss/val = {checkpoint_info.val_loss:.4f}")
+        print(
+            f"Saved checkpoint at step {checkpoint_info.step}"
+            f" with loss/val = {checkpoint_info.val_loss:.4f} took {saving_time_seconds:.3f}s"
+        )

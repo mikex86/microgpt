@@ -8,7 +8,7 @@ import torch
 from torch.nn import Module
 from torch.optim import AdamW
 
-from models.moduleapi import ISparselyWeightDecayedModule
+from models.moduleapi import ISparselyWeightDecayedModule, ILanguageModel
 from train import checkpointing, logging
 from utils import iterator_utils
 from train.checkpointing import CheckpointInfo
@@ -81,7 +81,7 @@ class LanguageModelTrainer:
     A class responsible for training language models.
     """
 
-    def __init__(self, model: Module, training_config: TrainingConfig):
+    def __init__(self, model: ILanguageModel, training_config: TrainingConfig):
         model = model.to(training_config.device)
 
         try:
@@ -165,23 +165,8 @@ class LanguageModelTrainer:
             total_loss = 0
             for ministep in range(self.training_config.n_mini_steps):
                 with self.autocast_ctx:
-                    logits = self.model(x)
-                    loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.shape[-1]), y.view(-1))
-
-                total_loss += loss.item()  # use un-scaled loss for logging
-
-                # scale loss for mixed precision training
-                if self.scalar is not None:
-                    loss = self.scalar.scale(loss)
-
-                loss.backward()
-
-                # free all memory between mini steps to avoid OOM
-                del logits
-                del loss
-
-                if self.training_config.hyper_save_memory and self.training_config.device.type == "cuda":
-                    torch.cuda.empty_cache()
+                    loss = self.model.back_propagate(x, y, self.scalar, self.training_config.hyper_save_memory)
+                    total_loss += loss  # use un-scaled loss for logging
 
             # Gradient clipping
             if self.training_config.grad_clip != 0.0:
@@ -258,6 +243,7 @@ class LanguageModelTrainer:
         current_info = CheckpointInfo(step=step, val_loss=eval_loss)
 
         # save latest checkpoint
+        start_time = time.time()
         checkpointing.save_checkpoint(self.model, self.optimizer,
                                       self.training_config.checkpoint_dir_path, "latest",
                                       current_info)
@@ -269,5 +255,6 @@ class LanguageModelTrainer:
         checkpointing.save_checkpoint(self.model, self.optimizer,
                                       self.training_config.checkpoint_dir_path, "best",
                                       current_info)
+        end_time = time.time()
 
-        logging.log_save_checkpoint(current_info)
+        logging.log_save_checkpoint(current_info, end_time - start_time)

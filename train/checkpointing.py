@@ -7,6 +7,8 @@ import torch
 from torch.nn import Module, Parameter
 from torch.optim import Optimizer
 
+from train.logging import log_save_checkpoint
+
 
 @dataclass
 class CheckpointInfo:
@@ -49,8 +51,10 @@ def save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: st
 
 
 def _load_checkpoint(model: Module, optimizer: Optional[Optimizer], checkpoint_dir_path: str):
+    model_device = next(model.parameters()).device  # hack to get the device of the model
+
     checkpoint_file = os.path.join(checkpoint_dir_path, "checkpoint.pt")
-    checkpoint = torch.load(checkpoint_file)
+    checkpoint = torch.load(checkpoint_file, map_location=model_device)
     model.load_state_dict(checkpoint["model_state_dict"])
     if optimizer is not None:
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])

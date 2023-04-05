@@ -5,6 +5,7 @@ import torch.nn
 from dataclasses import dataclass
 
 from torch import nn
+from torch.cuda.amp import GradScaler
 
 from models.moduleapi import ISparselyWeightDecayedModule, WeightDecayGroups, ILanguageModel
 
@@ -272,6 +273,83 @@ class MemGptModel(ISparselyWeightDecayedModule, ILanguageModel):
         h = torch.cat(output, dim=1)  # (b, t1 * t2, c)
         return self.lm_head(h)
 
+    def back_propagate(self, x: torch.tensor, targets: torch.tensor,
+                       loss_scalar: GradScaler = None,
+                       hyper_save_memory: bool = False) -> float:
+        self.train()
+        device = next(self.parameters()).device
+        b, t = x.size()
+
+        # split x into chunks of block size
+        x_chunks = []
+        n_chunks = t // self.config.block_size + int(t % self.config.block_size != 0)
+        for i in range(n_chunks):
+            x_chunks.append(x[:, i * self.config.block_size:(i + 1) * self.config.block_size])
+
+        # split targets into chunks of block size
+        targets_chunks = []
+        for i in range(n_chunks):
+            targets_chunks.append(targets[:, i * self.config.block_size:(i + 1) * self.config.block_size])
+
+        prev_layer_acts = [
+            self.init_prev_layer_acts[i]
+            .expand(b, self.config.block_size, self.config.n_embd)
+            for i in range(self.config.n_layers)
+        ]
+        max_t1 = len(x_chunks)
+
+        assert max_t1 <= self.config.n_windows, f"t1={max_t1} > num_blocks={self.config.n_windows}"
+
+        losses = []
+
+        for t1 in range(max_t1):
+            x_chunk = x_chunks[t1]  # (b, t2)
+            t2 = x_chunk.size(1)
+
+            assert t2 <= self.config.block_size, f"t2={t2} > block_size={self.config.block_size}"
+
+            # token embeddings
+            tok_emb = self.wte(x_chunk)
+
+            # add position embeddings
+            pos_idx = torch.arange(0, t2, device=x_chunk.device).unsqueeze(0)
+            pos_emb = self.wpe(pos_idx) + self.bwpe(torch.tensor(t1, device=x.device))
+            h = self.drop(tok_emb + pos_emb)
+
+            # transformer
+            for i in range(self.config.n_layers):
+                block = self.blocks[i]
+                prev_h = prev_layer_acts[i]
+                h = block(h, prev_h)
+                prev_layer_acts[i] = h
+
+            h = self.ln_f(h)  # (b, t2, c)
+
+            # compute loss
+            lm_logits = self.lm_head(h)  # (b, t2, vocab_size)
+            targets_chunk = targets_chunks[t1]
+            loss = torch.nn.functional.cross_entropy(lm_logits.view(-1, lm_logits.size(-1)), targets_chunk.reshape(-1))
+
+            # append loss number to list for reporting
+            losses.append(loss.item())
+
+            # scale loss if using mixed precision
+            if loss_scalar is not None:
+                loss = loss_scalar.scale(loss)
+
+            loss.backward(retain_graph=True)
+
+            # free memory
+            if hyper_save_memory:
+                del lm_logits
+                del loss
+                # free cuda cache
+                if device.type == 'cuda':
+                    torch.cuda.empty_cache()
+
+        # return mean un-scaled loss
+        return sum(losses) / len(losses)
+
     def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], int]) -> None:
         self.eval()
         device = next(self.parameters()).device
@@ -331,7 +409,6 @@ class MemGptModel(ISparselyWeightDecayedModule, ILanguageModel):
                 # add chosen token to prompt
                 prompt.append(chosen_token)
         self.train()
-
 
     def get_weight_decay_groups(self) -> WeightDecayGroups:
         all_modules = list(self.named_modules())

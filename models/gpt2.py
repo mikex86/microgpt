@@ -4,6 +4,7 @@ import torch.nn
 from dataclasses import dataclass
 
 from torch import nn
+from torch.cuda.amp import GradScaler
 
 from models.moduleapi import ISparselyWeightDecayedModule, WeightDecayGroups, ILanguageModel
 from tokenization.tokenizer import Tokenizer
@@ -179,6 +180,27 @@ class Gpt2Model(ISparselyWeightDecayedModule, ILanguageModel):
             weight_decay_params=weight_decay_params,
             no_weight_decay_params=no_weight_decay_params
         )
+
+    def back_propagate(self, x: torch.tensor, targets: torch.tensor, loss_scalar: GradScaler = None,
+                       hyper_save_memory: bool = False) -> float:
+        self.train()
+        device = next(self.parameters()).device
+        logits = self(x)
+        loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+
+        unscaled_loss = loss.item()
+
+        if loss_scalar is not None:
+            loss = loss_scalar.scale(loss)
+        loss.backward()
+
+        if hyper_save_memory:
+            del logits
+            del loss
+            if device.type == 'cuda':
+                torch.cuda.empty_cache()
+
+        return unscaled_loss
 
 
 class Gpt2Tokenizer(Tokenizer):

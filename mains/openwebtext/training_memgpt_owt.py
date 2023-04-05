@@ -50,7 +50,7 @@ def main():
 
     memgpt_config = MemGptConfig(
         block_size=256,
-        n_windows=8,
+        n_windows=16,
         n_layers=6,
         n_heads=4,
         n_embd=256,
