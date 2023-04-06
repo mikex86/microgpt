@@ -166,22 +166,30 @@ class LanguageModelTrainer:
                 param_group["lr"] = lr
 
             # iterate over mini steps
-            total_loss = None
+            total_loss = 0
+            nan_loss_recovery = False
             for ministep in range(self.training_config.n_mini_steps):
                 with self.autocast_ctx:
                     loss = self.model.back_propagate(x, y, self.scalar, self.training_config.hyper_save_memory)
                     # check if loss is nan
                     if math.isnan(loss):
+                        # try to recover from nan loss
                         logging.log_loss_nan(self.current_step)
-                        self.optimizer.zero_grad(set_to_none=False)
-                        continue  # skip this step and hope for the best
-                    if total_loss is None:
-                        total_loss = loss
-                    else:
-                        total_loss += loss  # use un-scaled loss for logging
 
-            if total_loss is None:
-                continue  # skip this step because all mini-steps were nan
+                        # reset gradients accumulated so far because of .back_propagate()
+                        self.model.zero_grad()
+
+                        # load latest checkpoint
+                        checkpointing.load_checkpoint(
+                            self.model, self.optimizer,
+                            self.training_config.checkpoint_dir_path, "latest"
+                        )
+                        nan_loss_recovery = True
+                        break
+                    total_loss += loss  # use un-scaled loss for logging
+
+            if nan_loss_recovery:
+                continue
 
             # Gradient clipping
             if self.training_config.grad_clip != 0.0:

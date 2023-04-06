@@ -59,7 +59,7 @@ def log_save_checkpoint(checkpoint_info: 'CheckpointInfo', saving_time_seconds: 
 
 
 def log_loss_nan(current_step: int):
-    print(f"WARNING: Loss is NaN at step {current_step}!")
+    print(f"WARNING: Loss is NaN at step {current_step}. Attempting to recover...")
 
 
 def log_tried_save_nan_checkpoint(current_step: int):
