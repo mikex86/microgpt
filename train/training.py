@@ -1,5 +1,6 @@
 import math
 import os
+import shutil
 import time
 from contextlib import nullcontext
 from dataclasses import dataclass
@@ -259,10 +260,9 @@ class LanguageModelTrainer:
             return
 
         # copy "latest" checkpoint as "best" checkpoint
-        os.replace(
-            os.path.join(self.training_config.checkpoint_dir_path, "latest.pth"),
-            os.path.join(self.training_config.checkpoint_dir_path, "best.pth")
-        )
+        os.rmdir(os.path.join(self.training_config.checkpoint_dir_path, "best"))
+        shutil.copytree(os.path.join(self.training_config.checkpoint_dir_path, "latest"),
+                        os.path.join(self.training_config.checkpoint_dir_path, "best"))
 
         end_time = time.time()
 
