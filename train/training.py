@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Tuple
 
 import torch
-from torch.nn import Module
 from torch.optim import AdamW
 
 from models.moduleapi import ISparselyWeightDecayedModule, ILanguageModel
@@ -110,8 +109,9 @@ class LanguageModelTrainer:
             fused=device_type == "cuda"  # fused kernels are only available on CUDA
         )
 
-        is_mixed_precision = self.model.dtype == torch.float32 and self.training_config.dtype == torch.float16
-        self.scalar = torch.cuda.amp.GradScaler() if device_type == "cuda" and is_mixed_precision else None
+        self.scalar = torch.cuda.amp.GradScaler(
+            enabled=(self.training_config.dtype == torch.float16)
+        ) if device_type == "cuda" else None
 
         # Load checkpoint if it exists
         checkpoint_info = checkpointing.get_checkpoint_info(self.training_config.checkpoint_dir_path, 'latest')

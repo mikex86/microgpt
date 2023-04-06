@@ -7,6 +7,7 @@ BUCKET_URL = "https://micro-gpt-datasets-us.s3.us-west-1.amazonaws.com"
 
 
 def download_dataset():
+    os.makedirs("datasets/openwebtext_gpt2", exist_ok=True)
     class DownloadProgressBar:
         def __init__(self):
             self.pbar = None

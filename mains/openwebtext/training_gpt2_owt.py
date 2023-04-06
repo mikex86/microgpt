@@ -47,7 +47,7 @@ def main():
         min_learning_rate=6e-6,
         max_learning_rate=6e-4,
         warmup_steps=100,
-        max_steps=5000,
+        max_steps=600000,
 
         grad_clip=1.0,
 
