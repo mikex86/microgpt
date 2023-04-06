@@ -166,7 +166,7 @@ class LanguageModelTrainer:
                 param_group["lr"] = lr
 
             # iterate over mini steps
-            total_loss = 0
+            total_loss = None
             for ministep in range(self.training_config.n_mini_steps):
                 with self.autocast_ctx:
                     loss = self.model.back_propagate(x, y, self.scalar, self.training_config.hyper_save_memory)
@@ -175,7 +175,13 @@ class LanguageModelTrainer:
                         logging.log_loss_nan(self.current_step)
                         self.optimizer.zero_grad(set_to_none=False)
                         continue  # skip this step and hope for the best
-                    total_loss += loss  # use un-scaled loss for logging
+                    if total_loss is None:
+                        total_loss = loss
+                    else:
+                        total_loss += loss  # use un-scaled loss for logging
+
+            if total_loss is None:
+                continue  # skip this step because all mini-steps were nan
 
             # Gradient clipping
             if self.training_config.grad_clip != 0.0:
