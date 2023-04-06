@@ -1,4 +1,5 @@
 import math
+import os
 import time
 from contextlib import nullcontext
 from dataclasses import dataclass
@@ -168,6 +169,10 @@ class LanguageModelTrainer:
             for ministep in range(self.training_config.n_mini_steps):
                 with self.autocast_ctx:
                     loss = self.model.back_propagate(x, y, self.scalar, self.training_config.hyper_save_memory)
+                    # check if loss is nan
+                    if math.isnan(loss):
+                        logging.log_loss_nan(self.current_step)
+                        continue  # skip this step and hope for the best
                     total_loss += loss  # use un-scaled loss for logging
 
             # Gradient clipping
@@ -241,7 +246,7 @@ class LanguageModelTrainer:
         :param step: the current step of training
         :param eval_loss: the loss scored during evaluation. Used to determine if the current checkpoint is the best
         """
-        # best_info = checkpointing.get_checkpoint_info(self.training_config.checkpoint_dir_path, "best")
+        best_info = checkpointing.get_checkpoint_info(self.training_config.checkpoint_dir_path, "best")
         current_info = CheckpointInfo(step=step, val_loss=eval_loss)
 
         # save latest checkpoint
@@ -250,13 +255,15 @@ class LanguageModelTrainer:
                                       self.training_config.checkpoint_dir_path, "latest",
                                       current_info)
 
-        # if best_info is not None and best_info.val_loss < eval_loss:
-        #     return
-        #
-        # # save best checkpoint
-        # checkpointing.save_checkpoint(self.model, self.optimizer,
-        #                               self.training_config.checkpoint_dir_path, "best",
-        #                               current_info)
+        if best_info is not None and best_info.val_loss < eval_loss:
+            return
+
+        # copy "latest" checkpoint as "best" checkpoint
+        os.replace(
+            os.path.join(self.training_config.checkpoint_dir_path, "latest.pth"),
+            os.path.join(self.training_config.checkpoint_dir_path, "best.pth")
+        )
+
         end_time = time.time()
 
         logging.log_save_checkpoint(current_info, end_time - start_time)

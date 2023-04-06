@@ -49,7 +49,7 @@ def main():
         warmup_steps=100,
         max_steps=600000,
 
-        grad_clip=1.0,
+        grad_clip=0.01,
 
         weight_decay=1e-1,
         betas=(0.9, 0.999),
