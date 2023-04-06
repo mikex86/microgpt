@@ -260,7 +260,9 @@ class LanguageModelTrainer:
             return
 
         # copy "latest" checkpoint as "best" checkpoint
-        os.rmdir(os.path.join(self.training_config.checkpoint_dir_path, "best"))
+        if os.path.exists(os.path.join(self.training_config.checkpoint_dir_path, "best")):
+            os.rmdir(os.path.join(self.training_config.checkpoint_dir_path, "best"))
+
         shutil.copytree(os.path.join(self.training_config.checkpoint_dir_path, "latest"),
                         os.path.join(self.training_config.checkpoint_dir_path, "best"))
 
