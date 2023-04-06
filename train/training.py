@@ -173,6 +173,7 @@ class LanguageModelTrainer:
                     # check if loss is nan
                     if math.isnan(loss):
                         logging.log_loss_nan(self.current_step)
+                        self.optimizer.zero_grad(set_to_none=True)
                         continue  # skip this step and hope for the best
                     total_loss += loss  # use un-scaled loss for logging
 
