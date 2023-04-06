@@ -247,6 +247,10 @@ class LanguageModelTrainer:
         :param step: the current step of training
         :param eval_loss: the loss scored during evaluation. Used to determine if the current checkpoint is the best
         """
+        if math.isnan(eval_loss):
+            logging.log_tried_save_nan_checkpoint(step)
+            return
+
         best_info = checkpointing.get_checkpoint_info(self.training_config.checkpoint_dir_path, "best")
         current_info = CheckpointInfo(step=step, val_loss=eval_loss)
 
