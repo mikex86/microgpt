@@ -177,7 +177,7 @@ class LanguageModelTrainer:
                         logging.log_loss_nan(self.current_step)
 
                         # reset gradients accumulated so far because of .back_propagate()
-                        self.model.zero_grad()
+                        self.model.zero_grad(set_to_none=True)
 
                         # load latest checkpoint
                         checkpointing.load_checkpoint(
@@ -185,6 +185,13 @@ class LanguageModelTrainer:
                             self.training_config.checkpoint_dir_path, "latest"
                         )
                         nan_loss_recovery = True
+
+                        # free as much memory as possible after recovery
+                        # because the checkpoint loading might cause
+                        # a temporary memory usage spike leading to OOM
+                        # during the next backpropagation
+                        if self.training_config.device.type == "cuda":
+                            torch.cuda.empty_cache()
                         break
                     total_loss += loss  # use un-scaled loss for logging
 
