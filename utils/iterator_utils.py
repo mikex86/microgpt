@@ -41,10 +41,14 @@ def prefetching_iterator(dataset_iterator: iter,
     # create a queue to store the prefetched examples
     prefetch_queue = queue.Queue(maxsize=num_prefetch)
 
+    done = False
+
     # define the function that will be run in the background
     def prefetch():
+        nonlocal done
         for example in dataset_iterator:
             prefetch_queue.put(example)
+        done = True
 
     # start the background thread
     thread = threading.Thread(target=prefetch)
@@ -52,6 +56,6 @@ def prefetching_iterator(dataset_iterator: iter,
     thread.start()
 
     # yield the prefetched examples
-    while True:
+    while not done:
         yield prefetch_queue.get()
         prefetch_queue.task_done()
