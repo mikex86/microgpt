@@ -151,6 +151,7 @@ class LanguageModelTrainer:
 
         # Training loop
         while self.current_step < self.training_config.max_steps:
+
             x, y = next(train_it)
             step_start_time = time.time()
 
@@ -246,12 +247,9 @@ class LanguageModelTrainer:
         """
         Performs evaluation of the model and returns the evaluation loss
         """
-        val_it = iterator_utils.prefetching_iterator(
-            iterator_utils.make_batched_iterator(dataset_iterator=self.training_config.val_dataset_iterator,
-                                                 batch_size=self.training_config.batch_size,
-                                                 device=self.training_config.device),
-            num_prefetch=10
-        )
+        val_it = iterator_utils.make_batched_iterator(dataset_iterator=self.training_config.val_dataset_iterator,
+                                                      batch_size=self.training_config.batch_size,
+                                                      device=self.training_config.device)
 
         total_loss = 0
         for i in range(self.training_config.num_evaluation_steps):
@@ -283,6 +281,8 @@ class LanguageModelTrainer:
                                       current_info)
 
         if best_info is not None and best_info.val_loss < eval_loss:
+            end_time = time.time()
+            logging.log_save_checkpoint(current_info, end_time - start_time)
             return
 
         # copy "latest" checkpoint as "best" checkpoint
@@ -297,5 +297,4 @@ class LanguageModelTrainer:
                         os.path.join(self.training_config.checkpoint_dir_path, "best"))
 
         end_time = time.time()
-
         logging.log_save_checkpoint(current_info, end_time - start_time)
