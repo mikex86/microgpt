@@ -6,3 +6,4 @@ tiktoken
 tqdm
 datasets
 progressbar
+s3fs
