@@ -34,6 +34,8 @@ tokenized = dataset.map(
     remove_columns=['text']
 )
 
+s3 = s3fs.S3FileSystem()
+
 # concatenate all the ids in each dataset into one large file we can use for training
 for split, split_dset in tokenized.items():
 
@@ -51,7 +53,10 @@ for split, split_dset in tokenized.items():
     chunk_size = 1024 * 1024 * 1024  # 1GB chunks
     buffer = io.BytesIO()
 
-    s3 = s3fs.S3FileSystem()
+    # check if the file already exists
+    if s3.exists(s3_key):
+        print(f"file {s3_key} already exists. skipping...")
+        continue
 
     s3.touch(s3_key, create_parents=True)
     with s3.open(s3_key, 'wb') as f:
