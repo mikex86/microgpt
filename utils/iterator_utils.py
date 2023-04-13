@@ -29,33 +29,45 @@ def make_batched_iterator(dataset_iterator: iter,
         yield x, y
 
 
-def prefetching_iterator(dataset_iterator: iter,
-                         num_prefetch: int):
+def prefetching_iterator(dataset_iterator: iter, num_prefetch: int):
     """
-    Takes an iterator and wraps it in a background prefetching iterator
+    Takes an iterator and wraps it in a background prefetching iterator.
+    Must be wrapped with a "with" statement to ensure the background thread is properly terminated
+    and the prefetching queue is properly freed.
     :param dataset_iterator: an infinite iterator over examples
     :param num_prefetch: the number of examples to prefetch in the background
     :return:
     """
+    class PrefetchingIterator:
+        def __init__(self, dataset_iterator, num_prefetch):
+            self.prefetch_queue = queue.Queue(maxsize=num_prefetch)
+            self.done = False
+            self.dataset_iterator = dataset_iterator
 
-    # create a queue to store the prefetched examples
-    prefetch_queue = queue.Queue(maxsize=num_prefetch)
+        def __enter__(self):
+            self.thread = threading.Thread(target=self.prefetch)
+            self.thread.daemon = True
+            self.thread.start()
+            return self
 
-    done = False
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            self.done = True
+            self.thread.join()
 
-    # define the function that will be run in the background
-    def prefetch():
-        nonlocal done
-        for example in dataset_iterator:
-            prefetch_queue.put(example)
-        done = True
+        def __iter__(self):
+            return self
 
-    # start the background thread
-    thread = threading.Thread(target=prefetch)
-    thread.daemon = True
-    thread.start()
+        def __next__(self):
+            if not self.done:
+                return self.prefetch_queue.get()
+            else:
+                raise StopIteration
 
-    # yield the prefetched examples
-    while not done:
-        yield prefetch_queue.get()
-        prefetch_queue.task_done()
+        def prefetch(self):
+            for example in self.dataset_iterator:
+                if self.done:
+                    break
+                self.prefetch_queue.put(example)
+
+    return PrefetchingIterator(dataset_iterator, num_prefetch)
+

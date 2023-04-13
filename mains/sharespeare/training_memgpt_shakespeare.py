@@ -7,7 +7,6 @@ from data.dataset import BinaryTokenDataset
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
 def main():
     memgpt_config = MemGptConfig(
         vocab_size=65,
@@ -33,8 +32,8 @@ def main():
         train_dataset_iterator=iter(train_ds),
         val_dataset_iterator=iter(val_ds),
 
-        batch_size=32,
-        n_mini_steps=5,
+        batch_size=8,
+        n_mini_steps=2,
 
         min_learning_rate=1e-4,
         max_learning_rate=1e-3,
@@ -52,7 +51,7 @@ def main():
         evaluation_period=25,
         num_evaluation_steps=32,
 
-        checkpoint_dir_path="../../checkpoints/shakespeare/memgpt_checkpoints",
+        checkpoint_dir_path="checkpoints/shakespeare/memgpt_checkpoints",
     )
     model = MemGptModel(memgpt_config)
     trainer = LanguageModelTrainer(model, training_config)
