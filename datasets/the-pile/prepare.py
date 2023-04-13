@@ -56,9 +56,10 @@ for split, split_dset in tokenized.items():
     s3.touch(s3_key, create_parents=True)
     with s3.open(s3_key, 'wb') as f:
         idx = 0
-        for example in tqdm(iterator_utils.prefetching_iterator(split_dset, num_prefetch=2000)):
+        for example in tqdm(iterator_utils.prefetching_iterator(split_dset, num_prefetch=10000)):
             # Write the current example to the buffer
             arr = np.array(example['ids'], dtype=dtype).tobytes()
             f.write(arr)
 
             idx += example['len']
+    print(f"done writing split {split}.")
