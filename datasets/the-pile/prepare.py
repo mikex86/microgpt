@@ -39,10 +39,6 @@ s3 = s3fs.S3FileSystem()
 # concatenate all the ids in each dataset into one large file we can use for training
 for split, split_dset in tokenized.items():
 
-    # TODO: DEBUG ONLY
-    if split == 'train':
-        continue
-
     # one file for each split
     s3_key = f"{s3_bucket}/{s3_prefix}/{split}.bin"
     dtype = np.uint16  # (can do since enc.max_token_value == 50256 is < 2**16)
