@@ -7,3 +7,8 @@ tqdm
 datasets
 progressbar
 s3fs
+sentencepiece
+openai
+nbformat
+torchhacks
+fairscale

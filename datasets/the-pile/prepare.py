@@ -1,4 +1,7 @@
 import io
+
+import boto3
+from s3transfer import TransferConfig
 from tqdm import tqdm
 import numpy as np
 import tiktoken
