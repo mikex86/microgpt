@@ -42,10 +42,12 @@ class Gpt2CausalSelfAttention(torch.nn.Module):
         assert config.n_embd % config.n_heads == 0
 
         # key, query, value projections for all heads
-        self.c_attn = torch.nn.Linear(config.n_embd, config.n_embd * 3, bias=config.bias, device=config.device, dtype=config.dtype)
+        self.c_attn = torch.nn.Linear(config.n_embd, config.n_embd * 3, bias=config.bias, device=config.device,
+                                      dtype=config.dtype)
 
         # output projection
-        self.c_proj = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
+        self.c_proj = torch.nn.Linear(config.n_embd, config.n_embd, bias=config.bias, device=config.device,
+                                      dtype=config.dtype)
 
         # regularization
         self.attn_drop = torch.nn.Dropout(config.dropout)
@@ -86,8 +88,10 @@ class Gpt2MLP(torch.nn.Module):
 
     def __init__(self, config: Gpt2Config):
         super().__init__()
-        self.c_fc = torch.nn.Linear(config.n_embd, config.n_embd * 4, bias=config.bias, device=config.device, dtype=config.dtype)
-        self.c_proj = torch.nn.Linear(config.n_embd * 4, config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
+        self.c_fc = torch.nn.Linear(config.n_embd, config.n_embd * 4, bias=config.bias, device=config.device,
+                                    dtype=config.dtype)
+        self.c_proj = torch.nn.Linear(config.n_embd * 4, config.n_embd, bias=config.bias, device=config.device,
+                                      dtype=config.dtype)
         self.act = torch.nn.GELU()
         self.drop = torch.nn.Dropout(config.dropout)
 
@@ -125,7 +129,8 @@ class Gpt2Model(ISparselyWeightDecayedModule, ILanguageModel):
         self.blocks = nn.ModuleList([Gpt2Block(config) for _ in range(config.n_layers)])
         self.ln_f = Gpt2LayerNorm(config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
 
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=config.bias, device=config.device, dtype=config.dtype)
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=config.bias, device=config.device,
+                                 dtype=config.dtype)
 
     def forward(self, x):
         b, t = x.size()
@@ -146,18 +151,18 @@ class Gpt2Model(ISparselyWeightDecayedModule, ILanguageModel):
         x = self.ln_f(x)
         return self.lm_head(x)
 
+    @torch.inference_mode()
     def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], int]) -> None:
         self.eval()
         device = next(self.parameters()).device
         tokens = prompt.copy()
-        with torch.no_grad():
-            for _ in range(n_tokens):
-                tokens = tokens[-self.config.block_size:]  # crop to block size
-                tokens_tensor = torch.tensor(tokens, dtype=torch.long, device=device).unsqueeze(0)
-                logits = self(tokens_tensor)
-                logits = logits[0, -1, :]
-                token = callback(logits)
-                tokens.append(token)
+        for _ in range(n_tokens):
+            tokens = tokens[-self.config.block_size:]  # crop to block size
+            tokens_tensor = torch.tensor(tokens, dtype=torch.long, device=device).unsqueeze(0)
+            logits = self(tokens_tensor)
+            logits = logits[0, -1, :]
+            token = callback(logits)
+            tokens.append(token)
         self.train()
 
     def get_weight_decay_groups(self) -> WeightDecayGroups:

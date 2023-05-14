@@ -8,7 +8,7 @@ from tokenization.tokenizer import Tokenizer
 
 class AutoregressiveSampler:
 
-    def __init__(self, model: ILanguageModel, tokenizer: Tokenizer):
+    def __init__(self, model: ILanguageModel, tokenizer: Tokenizer, token_blacklist: List[int] = None):
         try:
             torch.compile(model)
         except RuntimeError as e:
@@ -17,7 +17,9 @@ class AutoregressiveSampler:
 
         self.model = model
         self.tokenizer = tokenizer
+        self.token_blacklist = token_blacklist
 
+    @torch.inference_mode()
     def __sample(self, prompt_tokens: List[int], num_tokens: int, temperature: float, top_k: int,
                  token_callback: Callable[[int], None] = None):
         new_tokens = []
@@ -32,6 +34,11 @@ class AutoregressiveSampler:
                 top_k = min(max(top_k, 1), logits.size(-1))  # clamp top_k between 1 and vocab_size
                 indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
                 logits[indices_to_remove] = -float('Inf')
+
+            # blacklisting
+            if self.token_blacklist is not None:
+                for token in self.token_blacklist:
+                    logits[token] = -float('Inf')
 
             # sample from the distribution
             token = torch.multinomial(torch.softmax(logits, dim=-1), num_samples=1).item()
@@ -60,11 +67,22 @@ class AutoregressiveSampler:
             new_tokens)
 
     def stream_text(self, prompt: str, num_tokens: int,
-                    token_callback: Callable[[str], None],
+                    text_callback: Callable[[str], None],
                     temperature: float = 1.0,
                     top_k: int = 0):
         prompt_tokens = self.tokenizer.encode(prompt)
+        tokens = prompt_tokens.copy()
+
+        prev_str = prompt
+
+        def handle_token(token: int):
+            nonlocal prev_str, tokens
+            tokens.append(token)
+            new_str = self.tokenizer.decode(tokens)
+            text_callback(new_str[len(prev_str):])
+            prev_str = new_str
+
         self.__sample(
             prompt_tokens, num_tokens, temperature, top_k,
-            lambda token: token_callback(self.tokenizer.decode([token]))
+            lambda token: handle_token(token)
         )

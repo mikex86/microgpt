@@ -2,6 +2,7 @@ import os
 
 import wandb
 from typing import TYPE_CHECKING
+import traceback
 
 if TYPE_CHECKING:
     from train.checkpointing import CheckpointInfo
@@ -64,3 +65,10 @@ def log_loss_nan(current_step: int):
 
 def log_tried_save_nan_checkpoint(current_step: int):
     print(f"WARNING: Tried to save checkpoint with NaN loss at step {current_step}!")
+
+
+def log_error(e: Exception):
+    print(f"ERROR: {e}")
+    traceback.print_exc()
+    if LOG_TO_WANDB:
+        wandb.alert(title="Error", text=str(e) + "\n" + traceback.format_exc())

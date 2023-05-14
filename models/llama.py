@@ -1,7 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # Modified by mikex86
 # This software may be used and distributed according to the terms of the GNU General Public License version 3.
-import copy
 import json
 import math
 import os
@@ -12,7 +11,9 @@ from typing import Optional, Tuple, List, Callable
 import fairscale.nn.model_parallel.initialize as fs_init
 import torch
 import torch.nn.functional as F
-import torchhacks
+from torch.cuda.amp import GradScaler
+
+from utils import torchhacks
 from fairscale.nn.model_parallel.layers import (
     ParallelEmbedding,
     RowParallelLinear,
@@ -23,6 +24,10 @@ from torch import nn
 
 from models.moduleapi import ILanguageModel
 from tokenization.tokenizer import Tokenizer
+from utils import torchhooks
+
+# needed for fp16 on cpu (temporary upcast to fp32)
+torchhooks.init_torch_hooks()
 
 
 @dataclass
@@ -36,6 +41,7 @@ class LlamaConfig:
 
     max_batch_size: int = 32
     max_seq_len: int = 2048
+    init_weights: bool = False  # wether to initialize weights with normal distribution
 
     @staticmethod
     def from_json(file_path: str) -> 'LlamaConfig':
@@ -99,28 +105,28 @@ class Attention(nn.Module):
             args.n_heads * self.head_dim,
             bias=False,
             gather_output=False,
-            init_method=lambda x: x,
+            init_method=(lambda x: torch.nn.init.normal_(x, std=0.02)) if args.init_weights else (lambda x: x),
         )
         self.wk = ColumnParallelLinear(
             args.dim,
             args.n_heads * self.head_dim,
             bias=False,
             gather_output=False,
-            init_method=lambda x: x,
+            init_method=(lambda x: torch.nn.init.normal_(x, std=0.02)) if args.init_weights else (lambda x: x),
         )
         self.wv = ColumnParallelLinear(
             args.dim,
             args.n_heads * self.head_dim,
             bias=False,
             gather_output=False,
-            init_method=lambda x: x,
+            init_method=(lambda x: torch.nn.init.normal_(x, std=0.02)) if args.init_weights else (lambda x: x),
         )
         self.wo = RowParallelLinear(
             args.n_heads * self.head_dim,
             args.dim,
             bias=False,
             input_is_parallel=True,
-            init_method=lambda x: x,
+            init_method=(lambda x: torch.nn.init.normal_(x, std=0.02)) if args.init_weights else (lambda x: x),
         )
 
         self.cache_k = torch.zeros(
@@ -142,14 +148,19 @@ class Attention(nn.Module):
 
         xq, xk = apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
 
-        self.cache_k = self.cache_k.to(xq)
-        self.cache_v = self.cache_v.to(xq)
+        # check if is eval
+        if not self.training:
+            self.cache_k = self.cache_k.to(xq)
+            self.cache_v = self.cache_v.to(xq)
 
-        self.cache_k[:bsz, start_pos: start_pos + seqlen] = xk
-        self.cache_v[:bsz, start_pos: start_pos + seqlen] = xv
+            self.cache_k[:bsz, start_pos: start_pos + seqlen] = xk
+            self.cache_v[:bsz, start_pos: start_pos + seqlen] = xv
 
-        keys = self.cache_k[:bsz, : start_pos + seqlen]
-        values = self.cache_v[:bsz, : start_pos + seqlen]
+            keys = self.cache_k[:bsz, : start_pos + seqlen]
+            values = self.cache_v[:bsz, : start_pos + seqlen]
+        else:
+            keys = xk
+            values = xv
 
         xq = xq.transpose(1, 2)
         keys = keys.transpose(1, 2)
@@ -169,6 +180,7 @@ class Attention(nn.Module):
 class FeedForward(nn.Module):
     def __init__(
             self,
+            args: LlamaConfig,
             dim: int,
             hidden_dim: int,
             multiple_of: int,
@@ -178,13 +190,16 @@ class FeedForward(nn.Module):
         hidden_dim = multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of)
 
         self.w1 = ColumnParallelLinear(
-            dim, hidden_dim, bias=False, gather_output=False, init_method=lambda x: x
+            dim, hidden_dim, bias=False, gather_output=False,
+            init_method=(lambda x: torch.nn.init.normal_(x, std=0.02)) if args.init_weights else (lambda x: x),
         )
         self.w2 = RowParallelLinear(
-            hidden_dim, dim, bias=False, input_is_parallel=True, init_method=lambda x: x
+            hidden_dim, dim, bias=False, input_is_parallel=True,
+            init_method=(lambda x: torch.nn.init.normal_(x, std=0.02)) if args.init_weights else (lambda x: x),
         )
         self.w3 = ColumnParallelLinear(
-            dim, hidden_dim, bias=False, gather_output=False, init_method=lambda x: x
+            dim, hidden_dim, bias=False, gather_output=False,
+            init_method=(lambda x: torch.nn.init.normal_(x, std=0.02)) if args.init_weights else (lambda x: x),
         )
 
     def forward(self, x):
@@ -200,7 +215,7 @@ class TransformerBlock(nn.Module):
         self.head_dim = args.dim // args.n_heads
         self.attention = Attention(args, target_device)
         self.feed_forward = FeedForward(
-            dim=args.dim, hidden_dim=4 * args.dim, multiple_of=args.multiple_of
+            args=args, dim=args.dim, hidden_dim=4 * args.dim, multiple_of=args.multiple_of
         )
         self.layer_id = layer_id
         self.attention_norm = RMSNorm(args.dim, eps=args.norm_eps)
@@ -214,23 +229,25 @@ class TransformerBlock(nn.Module):
 
 class LlamaModel(ILanguageModel):
 
-    def __init__(self, params: LlamaConfig, target_device: torch.device):
+    def __init__(self, args: LlamaConfig, target_device: torch.device):
         super().__init__()
-        self.params = params
-        self.vocab_size = params.vocab_size
-        self.n_layers = params.n_layers
+        self.params = args
+        self.vocab_size = args.vocab_size
+        self.n_layers = args.n_layers
 
         self.tok_embeddings = ParallelEmbedding(
-            params.vocab_size, params.dim, init_method=lambda x: x
+            args.vocab_size, args.dim,
+            init_method=(lambda x: torch.nn.init.normal_(x)) if args.init_weights else (lambda x: x),
         )
 
         self.layers = torch.nn.ModuleList()
-        for layer_id in range(params.n_layers):
-            self.layers.append(TransformerBlock(layer_id, params, target_device))
+        for layer_id in range(args.n_layers):
+            self.layers.append(TransformerBlock(layer_id, args, target_device))
 
-        self.norm = RMSNorm(params.dim, eps=params.norm_eps)
+        self.norm = RMSNorm(args.dim, eps=args.norm_eps)
         self.output = ColumnParallelLinear(
-            params.dim, params.vocab_size, bias=False, init_method=lambda x: x
+            args.dim, args.vocab_size, bias=False,
+            init_method=(lambda x: torch.nn.init.normal_(x, std=0.02)) if args.init_weights else (lambda x: x),
         )
 
         self.freqs_cis = precompute_freqs_cis(
@@ -242,7 +259,8 @@ class LlamaModel(ILanguageModel):
              tokenizer: 'LlamaTokenizer',
              target_device: torch.device,
              local_rank: int,
-             world_size: int):
+             world_size: int,
+             fp_16: bool = True) -> 'LlamaModel':
         checkpoints = sorted(Path(checkpoint_path).glob("*.pth"))
 
         if len(checkpoints) != world_size:
@@ -257,27 +275,34 @@ class LlamaModel(ILanguageModel):
         # modify vocab size to match tokenizer
         config.vocab_size = tokenizer.vocab_size
 
-        is_cuda = target_device.type == "cuda"
+        if fp_16:
+            is_cuda = target_device.type == "cuda"
 
-        if is_cuda:
-            torch.set_default_tensor_type(torch.cuda.HalfTensor)
-        else:
-            torch.set_default_tensor_type(torch.HalfTensor)
+            if is_cuda:
+                torch.set_default_tensor_type(torch.cuda.HalfTensor)
+            else:
+                torch.set_default_tensor_type(torch.HalfTensor)
 
         model = LlamaModel(config, target_device).to(target_device)
-        torch.set_default_tensor_type(torch.FloatTensor)
 
         # hack to lazily load weights and avoid OOM
         state_dict = torchhacks.lazy_load(checkpoint)
+        # state_dict = torch.load(checkpoint, map_location=target_device)
 
         model.load_state_dict(state_dict, strict=False)
 
+        if fp_16:
+            torch.set_default_tensor_type(torch.FloatTensor)
+
+        del state_dict
+
         return model
 
-    @torch.inference_mode()
     def forward(self, tokens: torch.Tensor, start_pos: int):
         _bsz, seqlen = tokens.shape
         h = self.tok_embeddings(tokens)
+        h = h.type_as(self.output.weight)
+
         self.freqs_cis = self.freqs_cis.to(h.device)
         freqs_cis = self.freqs_cis[start_pos: start_pos + seqlen]
 
@@ -289,22 +314,62 @@ class LlamaModel(ILanguageModel):
         for layer in self.layers:
             h = layer(h, start_pos, freqs_cis, mask)
         h = self.norm(h)
-        output = self.output(h[:, -1, :])  # only compute last logits
+        output = self.output(h)
         return output.float()
 
+    @torch.inference_mode()
     def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], int]) -> None:
         self.eval()
         device = next(self.parameters()).device
         tokens = prompt.copy()
-        current_pos = 0
-        with torch.no_grad():
-            for _ in range(n_tokens):
-                tokens_tensor = torch.tensor(tokens, dtype=torch.long, device=device).unsqueeze(0)
-                logits = self(tokens_tensor, start_pos=current_pos)
-                token = callback(logits)
-                tokens.append(token)
-                current_pos += 1
+
+        prev_pos = 0
+        cur_pos = len(tokens)
+        for n in range(n_tokens):
+            tokens_tensor = torch.tensor(tokens[prev_pos:cur_pos], dtype=torch.long, device=device).unsqueeze(0)
+            logits = self(tokens_tensor, start_pos=prev_pos)[:, -1, :]
+            token = callback(logits)
+            tokens.append(token)
+            prev_pos = cur_pos
+            cur_pos += 1
         self.train()
+
+    def back_propagate(self, x: torch.tensor, targets: torch.tensor, loss_scalar: GradScaler = None,
+                       hyper_save_memory: bool = False) -> float:
+        self.train()
+        device = next(self.parameters()).device
+        logits = self(x, start_pos=0)
+        loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+
+        unscaled_loss = loss.item()
+
+        if loss_scalar is not None:
+            loss = loss_scalar.scale(loss)
+        loss.backward()
+
+        if hyper_save_memory:
+            del logits
+            del loss
+            if device.type == 'cuda':
+                torch.cuda.empty_cache()
+
+        return unscaled_loss
+
+    @torch.no_grad()
+    def get_eval_loss(self, x: torch.tensor, y: torch.tensor) -> float:
+        self.eval()
+        logits = self(x, start_pos=0)
+        loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+        loss_item = loss.item()
+
+        del logits
+        del loss
+
+        return loss_item
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.output.weight.dtype
 
 
 class LlamaTokenizer(Tokenizer):

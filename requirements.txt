@@ -10,5 +10,8 @@ s3fs
 sentencepiece
 openai
 nbformat
-torchhacks
 fairscale
+docker
+pyte
+pyglet
+pyyaml

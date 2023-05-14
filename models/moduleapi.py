@@ -49,6 +49,7 @@ class ILanguageModel(torch.nn.Module):
         pass
 
     @abstractmethod
+    @torch.inference_mode()
     def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], int]) -> None:
         """
         Generates a sequence of tokens from the given prompt

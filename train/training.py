@@ -133,111 +133,114 @@ class LanguageModelTrainer:
         """
         Performs the main training loop of the model
         """
+        try:
+            # Free as much memory as possible before entering the training loop
+            self.optimizer.zero_grad(set_to_none=True)
+            if self.training_config.device.type == "cuda":
+                torch.cuda.empty_cache()
 
-        # Free as much memory as possible before entering the training loop
-        self.optimizer.zero_grad(set_to_none=True)
-        if self.training_config.device.type == "cuda":
-            torch.cuda.empty_cache()
+            # Training loop
+            with iterator_utils.prefetching_iterator(
+                    iterator_utils.make_batched_iterator(
+                        dataset_iterator=self.training_config.train_dataset_iterator,
+                        batch_size=self.training_config.batch_size,
+                        device=self.training_config.device
+                    ),
+                    num_prefetch=10
+            ) as train_it:
+                while self.current_step < self.training_config.max_steps:
+                    x, y = next(train_it)
+                    step_start_time = time.time()
 
-        # Training loop
-        with iterator_utils.prefetching_iterator(
-                iterator_utils.make_batched_iterator(
-                    dataset_iterator=self.training_config.train_dataset_iterator,
-                    batch_size=self.training_config.batch_size,
-                    device=self.training_config.device
-                ),
-                num_prefetch=10
-        ) as train_it:
-            while self.current_step < self.training_config.max_steps:
-                x, y = next(train_it)
-                step_start_time = time.time()
+                    # update learning rate
+                    lr = get_learning_rate(
+                        step=self.current_step,
+                        n_warmup_steps=self.training_config.warmup_steps,
+                        n_lr_decay_steps=self.training_config.max_steps,
+                        max_lr=self.training_config.max_learning_rate,
+                        min_lr=self.training_config.min_learning_rate
+                    )
+                    for param_group in self.optimizer.param_groups:
+                        param_group["lr"] = lr
 
-                # update learning rate
-                lr = get_learning_rate(
-                    step=self.current_step,
-                    n_warmup_steps=self.training_config.warmup_steps,
-                    n_lr_decay_steps=self.training_config.max_steps,
-                    max_lr=self.training_config.max_learning_rate,
-                    min_lr=self.training_config.min_learning_rate
-                )
-                for param_group in self.optimizer.param_groups:
-                    param_group["lr"] = lr
+                    # iterate over mini steps
+                    total_loss = 0
+                    nan_loss_recovery = False
+                    for ministep in range(self.training_config.n_mini_steps):
+                        with self.autocast_ctx:
+                            loss = self.model.back_propagate(x, y, self.scalar, self.training_config.hyper_save_memory)
+                            # check if loss is nan
+                            if math.isnan(loss):
+                                # try to recover from nan loss
+                                logging.log_loss_nan(self.current_step)
 
-                # iterate over mini steps
-                total_loss = 0
-                nan_loss_recovery = False
-                for ministep in range(self.training_config.n_mini_steps):
-                    with self.autocast_ctx:
-                        loss = self.model.back_propagate(x, y, self.scalar, self.training_config.hyper_save_memory)
-                        # check if loss is nan
-                        if math.isnan(loss):
-                            # try to recover from nan loss
-                            logging.log_loss_nan(self.current_step)
+                                # reset gradients accumulated so far because of .back_propagate()
+                                self.model.zero_grad(set_to_none=True)
 
-                            # reset gradients accumulated so far because of .back_propagate()
-                            self.model.zero_grad(set_to_none=True)
+                                # load latest checkpoint
+                                checkpointing.load_checkpoint(
+                                    self.model, self.optimizer,
+                                    self.training_config.checkpoint_dir_path, "latest"
+                                )
+                                nan_loss_recovery = True
 
-                            # load latest checkpoint
-                            checkpointing.load_checkpoint(
-                                self.model, self.optimizer,
-                                self.training_config.checkpoint_dir_path, "latest"
-                            )
-                            nan_loss_recovery = True
+                                # free as much memory as possible after recovery
+                                # because the checkpoint loading might cause
+                                # a temporary memory usage spike leading to OOM
+                                # during the next backpropagation
+                                if self.training_config.device.type == "cuda":
+                                    torch.cuda.empty_cache()
+                                break
+                            total_loss += loss  # use un-scaled loss for logging
 
-                            # free as much memory as possible after recovery
-                            # because the checkpoint loading might cause
-                            # a temporary memory usage spike leading to OOM
-                            # during the next backpropagation
-                            if self.training_config.device.type == "cuda":
-                                torch.cuda.empty_cache()
-                            break
-                        total_loss += loss  # use un-scaled loss for logging
+                    if nan_loss_recovery:
+                        continue
 
-                if nan_loss_recovery:
-                    continue
+                    # Gradient clipping
+                    if self.training_config.grad_clip != 0.0:
+                        if self.scalar is not None:
+                            self.scalar.unscale_(self.optimizer)
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.training_config.grad_clip)
 
-                # Gradient clipping
-                if self.training_config.grad_clip != 0.0:
-                    if self.scalar is not None:
-                        self.scalar.unscale_(self.optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.training_config.grad_clip)
+                    # update parameters
+                    with torch.no_grad():
+                        if self.scalar is not None:
+                            self.scalar.step(self.optimizer)
+                            self.scalar.update()
+                        else:
+                            self.optimizer.step()
 
-                # update parameters
-                with torch.no_grad():
-                    if self.scalar is not None:
-                        self.scalar.step(self.optimizer)
-                        self.scalar.update()
-                    else:
-                        self.optimizer.step()
+                        # don't just zero, but free the memory
+                        self.optimizer.zero_grad(set_to_none=True)
 
-                    # don't just zero, but free the memory
-                    self.optimizer.zero_grad(set_to_none=True)
+                    step_end_time = time.time()
 
-                step_end_time = time.time()
+                    step_ms = (step_end_time - step_start_time) * 1000
 
-                step_ms = (step_end_time - step_start_time) * 1000
-
-                # log data from the current step
-                log_data = {
-                    "loss/train": total_loss / self.training_config.n_mini_steps,
-                }
-                logging.log_train_step(self.current_step, step_ms, log_data)
-
-                if self.current_step % self.training_config.evaluation_period == 0:
-                    # evaluate model
-                    eval_loss = self.perform_evaluation()
-
-                    # log evaluation data
+                    # log data from the current step
                     log_data = {
-                        "loss/val": eval_loss
+                        "loss/train": total_loss / self.training_config.n_mini_steps,
                     }
-                    logging.log_eval_step(self.current_step, log_data)
+                    logging.log_train_step(self.current_step, step_ms, log_data)
 
-                    # save checkpoint
-                    if self.current_step > 0:
-                        self.save_checkpoint(self.current_step, eval_loss)
+                    if self.current_step % self.training_config.evaluation_period == 0:
+                        # evaluate model
+                        eval_loss = self.perform_evaluation()
 
-                self.current_step += 1
+                        # log evaluation data
+                        log_data = {
+                            "loss/val": eval_loss
+                        }
+                        logging.log_eval_step(self.current_step, log_data)
+
+                        # save checkpoint
+                        if self.current_step > 0:
+                            self.save_checkpoint(self.current_step, eval_loss)
+
+                    self.current_step += 1
+        except Exception as e:
+            logging.log_error(e)
+            raise e
 
     @torch.no_grad()
     def perform_evaluation(self) -> float:

@@ -296,6 +296,13 @@ class MemGptModel(ISparselyWeightDecayedModule, ILanguageModel):
                        loss_scalar: GradScaler = None,
                        hyper_save_memory: bool = False) -> float:
         self.train()
+
+        # TODO: remove hack
+        n_windows = torch.randint(1, self.config.n_windows + 1, (1,)).item()
+        x = x[:, :n_windows * self.config.block_size]
+        targets = targets[:, :n_windows * self.config.block_size]
+        # hack end
+
         device = next(self.parameters()).device
         b, t = x.size()
 
@@ -434,7 +441,7 @@ class MemGptModel(ISparselyWeightDecayedModule, ILanguageModel):
         # return mean un-scaled loss
         return sum(losses) / len(losses)
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], int]) -> None:
         self.eval()
         device = next(self.parameters()).device
