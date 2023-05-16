@@ -38,6 +38,7 @@ def prefetching_iterator(dataset_iterator: iter, num_prefetch: int):
     :param num_prefetch: the number of examples to prefetch in the background
     :return:
     """
+
     class PrefetchingIterator:
         def __init__(self, dataset_iterator, num_prefetch):
             self.prefetch_queue = queue.Queue(maxsize=num_prefetch)
@@ -70,4 +71,3 @@ def prefetching_iterator(dataset_iterator: iter, num_prefetch: int):
                 self.prefetch_queue.put(example)
 
     return PrefetchingIterator(dataset_iterator, num_prefetch)
-

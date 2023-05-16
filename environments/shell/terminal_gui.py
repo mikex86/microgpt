@@ -1,5 +1,7 @@
+from typing import Callable, List
+
 import pyglet
-from terminal_provider import TerminalProvider
+from .terminal_provider import TerminalProvider
 
 key_xterm_mapping = {
     pyglet.window.key.ESCAPE: '\x1b',
@@ -35,11 +37,13 @@ class TerminalGui:
         self.title = title
         self.term_prov = terminal_provider
         self.enable_input = enable_input
+        self.input_listeners: List[Callable[[str], None]] = []
         terminal_width, terminal_height = self.term_prov.get_terminal_size()
 
         font_size = 16
         self.window = pyglet.window.Window(width=int(terminal_width * font_size * 0.722),
-                                           height=int(terminal_height * font_size * 1.5), caption=self.title, vsync=True)
+                                           height=int(terminal_height * font_size * 1.5), caption=self.title,
+                                           vsync=True)
 
         self.labels = []
         for i in range(terminal_height):
@@ -68,19 +72,32 @@ class TerminalGui:
 
         @self.window.event
         def on_key_press(symbol, modifiers):
-            if self.enable_input:
-                if symbol == pyglet.window.key.ESCAPE:
+            if symbol == pyglet.window.key.ESCAPE:
+                if self.enable_input:
                     self.window.close()
-                elif symbol in key_xterm_mapping:
-                    self.term_prov.send_input(key_xterm_mapping[symbol])
+            elif symbol in key_xterm_mapping:
+                stdin = key_xterm_mapping[symbol]
+                for listener in self.input_listeners:
+                    listener(stdin)
+                if self.enable_input:
+                    self.term_prov.send_input(stdin)
 
         @self.window.event
         def on_text(text):
+            for listener in self.input_listeners:
+                listener(text)
             if self.enable_input:
                 self.term_prov.send_input(text)
 
         @self.window.event
         def on_text_motion(motion):
-            if self.enable_input:
-                if motion in motion_xterm_mapping:
-                    self.term_prov.send_input(motion_xterm_mapping[motion])
+            if motion in motion_xterm_mapping:
+                stdin = motion_xterm_mapping[motion]
+                if self.enable_input:
+                    self.term_prov.send_input(stdin)
+
+                for listener in self.input_listeners:
+                    listener(stdin)
+
+    def add_input_listener(self, listener: Callable[[str], None]):
+        self.input_listeners.append(listener)

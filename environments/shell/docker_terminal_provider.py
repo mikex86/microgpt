@@ -10,7 +10,7 @@ if os.name == "nt":
     import win32pipe
     import pywintypes
 
-from terminal_provider import TerminalProvider
+from .terminal_provider import TerminalProvider
 from docker.models.containers import Container
 
 
@@ -25,7 +25,8 @@ class DockerTerminalProvider(TerminalProvider):
             self.container: Container = self.client.containers.run('ubuntu_custom', 'sh',
                                                                    name=instance_name,
                                                                    detach=True, tty=True, stdin_open=True,
-                                                                   stdout=True, stderr=True)
+                                                                   stdout=True, stderr=True,
+                                                                   hostname='811423f3c78d')
         else:
             self.container = containers[0]
             # if container is not running, start it

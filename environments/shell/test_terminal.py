@@ -5,8 +5,8 @@ import pyglet
 from docker_terminal_provider import DockerTerminalProvider
 from terminal_gui import TerminalGui
 
-TERMINAL_WIDTH = 120
-TERMINAL_HEIGHT = 30
+TERMINAL_WIDTH = 40
+TERMINAL_HEIGHT = 20
 
 if __name__ == '__main__':
     term_provider = DockerTerminalProvider('test_ubuntu', (TERMINAL_WIDTH, TERMINAL_HEIGHT))

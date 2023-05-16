@@ -1,9 +1,22 @@
+from abc import abstractmethod
+from typing import Iterator, Tuple
+
 import numpy as np
 import torch
 import s3fs
 
 
-class BinaryTokenDataset:
+class Dataset:
+
+    @abstractmethod
+    def __iter__(self) -> Iterator[Tuple[torch.Tensor, torch.Tensor]]:
+        """
+        :return: an iterator over (input, target) pairs
+        """
+        pass
+
+
+class BinaryTokenDataset(Dataset):
 
     def __init__(self, file_path: str, seq_len: int, token_dtype: np.dtype) -> None:
         self.array = np.memmap(file_path, mode="r", dtype=token_dtype)
@@ -16,7 +29,10 @@ class BinaryTokenDataset:
                 torch.from_numpy(self.array[idx + 1:idx + self.seq_len + 1].astype(np.int64))
 
 
-class S3Dataset:
+class S3Dataset(Dataset):
+    """
+    TODO: This is untested. It might be broken.
+    """
 
     def __init__(self, file_path: str, seq_len: int, token_dtype: np.dtype) -> None:
         self.file_path = file_path

@@ -1,12 +1,11 @@
 import json
 import threading
-import time
 from dataclasses import dataclass
 from typing import Optional, Callable, List, Tuple
 
 import openai
 
-from environments.shell.shelltask.shellhistory_htmlviz import save_shell_task_history_as_html
+from environments.shell.gptshelltask.gptshellhistory_htmlviz import save_shell_task_history_as_html
 from environments.shell.terminal_provider import TerminalProvider
 
 
@@ -105,11 +104,11 @@ IMPORTANT:
 Exit the text editor after you are done editing.
 Eg. to exit nano, respond with the corresponding xterm sequence. Eg. for Control+X, y + Enter respond with "\x18y\r".
 
-IMPORTANT:
-Note that as an autoregressive language model you cannot meaningfully interact with a cursor-based text editor,
-when the file is not empty. Delete a file and completely re-write it instead, if you wish to edit/fix/modify it.
+IMPORTANT: Note that as an autoregressive language model you cannot meaningfully interact with a cursor-based text 
+editor, when the file is not empty. If you wish to edit a file, first delete it with "rm <filename>" and then 
+recreate it with "nano <filename>" and rewrite it from scratch. 
 
-Often clear the screen to save context length, ESPECIALLY after "cat", "less", "nano", "vim", etc.
+CAREFULLY READ THE TERMINAL OUTPUT AND CHOSE YOUR ACTIONS WISELY. DO NOT BLINDLY EXECUTE COMMANDS.
 
 If the task is complete, run the exit command.
 """
@@ -125,7 +124,12 @@ class GptShellTaskExecutor:
         self.history = []
 
     def capture_term_ctx_as_hist_entry(self):
-        term_context = self.term_provider.get_terminal_context()
+        term_context = self.term_provider.get_terminal_context().copy()
+
+        # visualize cursor position
+        x, y = self.term_provider.get_terminal_cursor_position()
+        term_context[y] = term_context[y][:x] + "█" + term_context[y][x + 1:]
+
         new_ctx_window = ""
         for line in term_context:
             # if line is not white, add it to the new context window
@@ -135,6 +139,7 @@ class GptShellTaskExecutor:
         # strip trailing newlines
         while new_ctx_window and new_ctx_window[-1] == "\n":
             new_ctx_window = new_ctx_window[:-1]
+
         self.history.append(ShellHistoryEntry(new_ctx_window, None, None))
 
     def __make_few_shot_learning_example(self, stdin: str, observation: str, thought: str, delay: float):
@@ -170,9 +175,9 @@ class GptShellTaskExecutor:
                                                   0.0)
 
         if i == 2:
-            self.__make_few_shot_learning_example("This is the first line\rThis is the second line\r",
+            self.__make_few_shot_learning_example("This is the first line\rThis is the second line\rThis is the third line",
                                                   "The text editor has been opened.",
-                                                  "I will write two lines of text",
+                                                  "I will write three lines of text without a trailing newline.",
                                                   1.0)
 
         if i == 3:
@@ -203,8 +208,6 @@ class GptShellTaskExecutor:
                     else:
                         if entry.ctx_is_few_shot_learning_helper:
                             messages.append({"role": "user", "content": entry.terminal_context})
-                        else:
-                            messages.append({"role": "user", "content": "<past terminal context. omitted for brevity>"})
 
                         if entry.is_final:
                             content_obj = {}
@@ -228,8 +231,8 @@ class GptShellTaskExecutor:
                     )
                     break
                 except openai.error.OpenAIError:
-                    idx = 3
-                    for entry in self.history[self.num_fsl_examples:]:
+                    idx = self.num_fsl_examples
+                    for entry in self.history[self.num_fsl_examples:-3]:
                         if entry.ctx_is_few_shot_learning_helper:
                             entry.ctx_is_few_shot_learning_helper = False
                             print(f"Omitting terminal context of history entry {idx}")

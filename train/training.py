@@ -238,7 +238,7 @@ class LanguageModelTrainer:
                             self.save_checkpoint(self.current_step, eval_loss)
 
                     self.current_step += 1
-        except Exception as e:
+        except BaseException as e:
             logging.log_error(e)
             raise e
 

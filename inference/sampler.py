@@ -27,21 +27,29 @@ class AutoregressiveSampler:
 
         def handle_props(logits: torch.tensor):
             nonlocal top_k, token_callback
-            logits /= temperature
 
-            # top-k sampling
-            if top_k > 0:
-                top_k = min(max(top_k, 1), logits.size(-1))  # clamp top_k between 1 and vocab_size
-                indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
-                logits[indices_to_remove] = -float('Inf')
+            # sample token
+            if temperature == 0.0:
+                logits = torch.softmax(logits, dim=-1)
+                token = torch.argmax(logits, dim=-1).item()
+            else:
+                logits /= temperature
 
-            # blacklisting
-            if self.token_blacklist is not None:
-                for token in self.token_blacklist:
-                    logits[token] = -float('Inf')
+                # top-k sampling
+                if top_k > 0:
+                    top_k = min(max(top_k, 1), logits.size(-1))  # clamp top_k between 1 and vocab_size
+                    indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
+                    logits[indices_to_remove] = -float('Inf')
 
-            # sample from the distribution
-            token = torch.multinomial(torch.softmax(logits, dim=-1), num_samples=1).item()
+                # blacklisting
+                if self.token_blacklist is not None:
+                    for token in self.token_blacklist:
+                        logits[token] = -float('Inf')
+
+                # sample from the distribution
+                token = torch.multinomial(torch.softmax(logits, dim=-1), num_samples=1).item()
+
+            # add token to tokens
             tokens.append(token)
             new_tokens.append(token)
 
@@ -60,7 +68,7 @@ class AutoregressiveSampler:
         return new_tokens
 
     def generate_text(self, prompt: str, num_tokens: int, temperature: float = 1.0, top_k: int = 0,
-                      include_prompt: bool = True):
+                      include_prompt: bool = True) -> str:
         prompt_tokens = self.tokenizer.encode(prompt)
         new_tokens = self.__sample(prompt_tokens, num_tokens, temperature, top_k)
         return self.tokenizer.decode(prompt_tokens + new_tokens) if include_prompt else self.tokenizer.decode(

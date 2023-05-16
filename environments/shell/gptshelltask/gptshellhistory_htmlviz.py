@@ -1,11 +1,11 @@
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from environments.shell.shelltask.shelltask_executor import ShellHistoryEntry
+    from environments.shell.gptshelltask.gptshelltask_executor import ShellHistoryEntry
 
 
 def save_shell_task_history_as_html(entries: List['ShellHistoryEntry'], html_path: str):
-    with open(html_path, 'w') as f:
+    with open(html_path, 'w', encoding="utf-8") as f:
         # Write HTML header
         f.write(
             """<html>

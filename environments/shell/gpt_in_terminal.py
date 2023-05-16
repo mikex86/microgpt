@@ -4,14 +4,14 @@ import time
 import pyglet
 
 from docker_terminal_provider import DockerTerminalProvider
-from environments.shell.shelltask.shelltask_executor import GptShellTaskExecutor
+from environments.shell.gptshelltask.gptshelltask_executor import GptShellTaskExecutor
 from terminal_gui import TerminalGui
 
-TERMINAL_WIDTH = 120
-TERMINAL_HEIGHT = 40
+TERMINAL_WIDTH = 60
+TERMINAL_HEIGHT = 30
 
-INTER_GPT_DELAY = 0.1
-INTER_STDIN_DELAY = 0.0
+INTER_GPT_DELAY = 0.2
+INTER_STDIN_DELAY = 0.025
 
 TASK = "Write a calculator console app in C that supports arbitrary expressions with +, -, *, /, parentheses and order of operations"
 
@@ -46,8 +46,16 @@ def main():
         if next_completion is not None:
             def send_to_terminal(new_stdin: str):
                 print(new_stdin, end='')
-                new_stdin = new_stdin.replace('\n', '\r')
-                stdin_to_send.append(new_stdin)
+                if '\n' in new_stdin:
+                    lines = new_stdin.split('\n')
+
+                    if new_stdin.endswith('\n'):
+                        lines = lines[:-1]
+
+                    for line in lines:
+                        stdin_to_send.append(line + '\r')
+                else:
+                    stdin_to_send.append(new_stdin)
 
             print("stdin from GPT:\n")
             next_completion.add_finish_listener(lambda: pyglet.clock.schedule_once(lambda dt: finish_response(), delay))

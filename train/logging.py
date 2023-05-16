@@ -67,7 +67,7 @@ def log_tried_save_nan_checkpoint(current_step: int):
     print(f"WARNING: Tried to save checkpoint with NaN loss at step {current_step}!")
 
 
-def log_error(e: Exception):
+def log_error(e: BaseException):
     print(f"ERROR: {e}")
     traceback.print_exc()
     if LOG_TO_WANDB:
