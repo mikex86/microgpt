@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import List, Callable
+from typing import List, Callable, Tuple
 
 import torch.nn
 from torch.cuda.amp import GradScaler
@@ -24,7 +24,7 @@ class ILanguageModel(torch.nn.Module):
     @abstractmethod
     def back_propagate(self, x: torch.tensor, targets: torch.tensor,
                        loss_scalar: GradScaler = None,
-                       hyper_save_memory: bool = False) -> float:
+                       hyper_save_memory: bool = False) -> Tuple[float, torch.Tensor]:
         """
         Back-propagates the cross entropy scaled loss between
         the given targets and the model's predictions and returns the un-scaled loss

@@ -4,7 +4,7 @@ import shutil
 import time
 from contextlib import nullcontext
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Tuple, Callable
 
 import torch
 from torch.optim import AdamW
@@ -49,6 +49,11 @@ class TrainingConfig:
     # Miscellaneous parameters
     device: torch.device
     dtype: torch.dtype
+
+    # Listeners
+    #
+    # Mini-step listener. (step, mini_step, loss, x, y, logits)
+    mini_step_listener: Callable[[int, int, float, torch.tensor, torch.tensor, torch.tensor], None] = None
 
     """
     Whether to delete loss and dependent tensors between mini steps.
@@ -168,7 +173,14 @@ class LanguageModelTrainer:
                     nan_loss_recovery = False
                     for ministep in range(self.training_config.n_mini_steps):
                         with self.autocast_ctx:
-                            loss = self.model.back_propagate(x, y, self.scalar, self.training_config.hyper_save_memory)
+                            loss, logits = self.model.back_propagate(
+                                x, y,
+                                self.scalar, self.training_config.hyper_save_memory
+                            )
+
+                            if self.training_config.mini_step_listener is not None:
+                                self.training_config.mini_step_listener(self.current_step, ministep, loss, x, y, logits)
+
                             # check if loss is nan
                             if math.isnan(loss):
                                 # try to recover from nan loss

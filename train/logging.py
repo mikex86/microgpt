@@ -40,6 +40,16 @@ def log_train_step(step: int, step_ms: float, data_dict: dict):
         wandb.log(data_dict)
 
 
+def log_train_step_extra(step: int, data_dict: dict):
+    __init_wandb()
+    if LOG_TO_CONSOLE:
+        print(f"Step {step}: {data_dict}")
+
+    if LOG_TO_WANDB:
+        data_dict["step"] = step
+        wandb.log(data_dict)
+
+
 def log_eval_step(step: int, data_dict: dict):
     __init_wandb()
     eval_loss = data_dict["loss/val"]

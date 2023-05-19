@@ -26,7 +26,7 @@ class DockerTerminalProvider(TerminalProvider):
                                                                    name=instance_name,
                                                                    detach=True, tty=True, stdin_open=True,
                                                                    stdout=True, stderr=True,
-                                                                   hostname='811423f3c78d')
+                                                                   hostname='ubuntu-container')
         else:
             self.container = containers[0]
             # if container is not running, start it

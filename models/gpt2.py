@@ -1,4 +1,4 @@
-from typing import List, Callable
+from typing import List, Callable, Tuple
 
 import torch.nn
 from dataclasses import dataclass
@@ -189,7 +189,7 @@ class Gpt2Model(ISparselyWeightDecayedModule, ILanguageModel):
         )
 
     def back_propagate(self, x: torch.tensor, targets: torch.tensor, loss_scalar: GradScaler = None,
-                       hyper_save_memory: bool = False) -> float:
+                       hyper_save_memory: bool = False) -> Tuple[float, torch.Tensor]:
         self.train()
         device = next(self.parameters()).device
         logits = self(x)
@@ -201,13 +201,15 @@ class Gpt2Model(ISparselyWeightDecayedModule, ILanguageModel):
             loss = loss_scalar.scale(loss)
         loss.backward()
 
+        logits_copy = logits.detach().clone()
+
         if hyper_save_memory:
             del logits
             del loss
             if device.type == 'cuda':
                 torch.cuda.empty_cache()
 
-        return unscaled_loss
+        return unscaled_loss, logits_copy
 
     @torch.no_grad()
     def get_eval_loss(self, x: torch.tensor, y: torch.tensor) -> float:

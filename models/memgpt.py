@@ -1,5 +1,5 @@
 import math
-from typing import List, Callable
+from typing import List, Callable, Tuple
 
 import torch.nn
 from dataclasses import dataclass
@@ -294,7 +294,7 @@ class MemGptModel(ISparselyWeightDecayedModule, ILanguageModel):
 
     def back_propagate(self, x: torch.tensor, targets: torch.tensor,
                        loss_scalar: GradScaler = None,
-                       hyper_save_memory: bool = False) -> float:
+                       hyper_save_memory: bool = False) -> Tuple[float, torch.Tensor]:
         self.train()
 
         # TODO: remove hack
@@ -327,6 +327,8 @@ class MemGptModel(ISparselyWeightDecayedModule, ILanguageModel):
         assert max_t1 <= self.config.n_windows, f"t1={max_t1} > num_blocks={self.config.n_windows}"
 
         losses = []
+
+        logit_copies = []
 
         for t1 in range(max_t1):
             x_chunk = x_chunks[t1]  # (b, t2)
@@ -365,6 +367,8 @@ class MemGptModel(ISparselyWeightDecayedModule, ILanguageModel):
 
             loss.backward(retain_graph=True)
 
+            logit_copies.append(lm_logits.detach().clone())
+
             del lm_logits
             del loss
 
@@ -375,7 +379,7 @@ class MemGptModel(ISparselyWeightDecayedModule, ILanguageModel):
                     torch.cuda.empty_cache()
 
         # return mean un-scaled loss
-        return sum(losses) / len(losses)
+        return sum(losses) / len(losses), torch.cat(logit_copies, dim=1)
 
     @torch.no_grad()
     def get_eval_loss(self, x: torch.tensor, y: torch.tensor) -> float:

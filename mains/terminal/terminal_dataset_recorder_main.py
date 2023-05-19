@@ -1,8 +1,8 @@
 import pyglet
 
-from docker_terminal_provider import DockerTerminalProvider
 from environments.shell.dataset.terminal_dataset_recorder import TerminalDatasetRecorder
-from terminal_gui import TerminalGui
+from environments.shell.docker_terminal_provider import DockerTerminalProvider
+from environments.shell.terminal_gui import TerminalGui
 
 TERMINAL_WIDTH = 80
 TERMINAL_HEIGHT = 20
@@ -23,7 +23,7 @@ if __name__ == '__main__':
 
     term_gui.add_input_listener(lambda new_stdin: handle_input(new_stdin))
 
-    pyglet.clock.schedule(lambda dt: term_provider.update())
+    pyglet.clock.schedule(lambda dt: dataset_recorder.update() or term_provider.update())
 
     pyglet.app.run()
 
