@@ -1,24 +1,32 @@
+from typing import Iterator, Tuple
+
 import torch
 import queue
 import threading
 
 
-def make_batched_iterator(dataset_iterator: iter,
+def make_batched_iterator(dataset_iterator: Iterator[Iterator[Tuple[torch.Tensor, torch.Tensor]]],
                           batch_size: int,
                           device: torch.device):
     """
     Takes an iterator over individual examples and returns an iterator over batches of examples.
     If the device is of type "cuda", the yielded batches are pinned to memory and non-blocking
-    :param dataset_iterator: an infinite iterator over examples (x, y) where x and y are tensors of shape (seq_len,)
+    :param dataset_iterator: an infinite iterator over iterators of examples (x, y) where x and y are tensors of shape (seq_len,).
+    This subiterator of examples must be processed in order as to not distort the dataset.
     :param batch_size: the number of examples in each batch
     :param device: the device on which to place the yielded batches on
     :return: an infinite iterator over batches of examples (x, y)
             where x and y are tensors of shape (batch_size, seq_len)
     """
     while True:
+        sequence_it = next(dataset_iterator)
         examples_x, examples_y = [], []
         for i in range(batch_size):
-            x, y = next(dataset_iterator)
+            try:
+                x, y = next(sequence_it)
+            except StopIteration:
+                sequence_it = next(dataset_iterator)
+                x, y = next(sequence_it)
             examples_x.append(x)
             examples_y.append(y)
         x, y = torch.stack(examples_x, dim=0), torch.stack(examples_y, dim=0)

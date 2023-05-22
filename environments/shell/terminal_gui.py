@@ -17,6 +17,7 @@ key_xterm_mapping = {
     pyglet.window.key.F10: '\x1b[21~',
     pyglet.window.key.F11: '\x1b[23~',
     pyglet.window.key.F12: '\x1b[24~',
+    pyglet.window.key.TAB: '\t'
 }
 
 motion_xterm_mapping = {
@@ -72,15 +73,14 @@ class TerminalGui:
 
         @self.window.event
         def on_key_press(symbol, modifiers):
-            if symbol == pyglet.window.key.ESCAPE:
-                if self.enable_input:
-                    self.window.close()
-            elif symbol in key_xterm_mapping:
+            if symbol in key_xterm_mapping:
                 stdin = key_xterm_mapping[symbol]
                 for listener in self.input_listeners:
                     listener(stdin)
                 if self.enable_input:
                     self.term_prov.send_input(stdin)
+            if symbol == pyglet.window.key.ESCAPE:
+                return pyglet.event.EVENT_HANDLED
 
         @self.window.event
         def on_text(text):

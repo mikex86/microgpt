@@ -46,12 +46,8 @@ class TerminalDatasetRecorder:
 
         new_stdin_bytes = new_stdin.encode('ISO-8859-1', 'replace')
 
-        if len(new_stdin_bytes) != 1:
-            # TODO:
-            # in this format, we only support single character inputs
-            # this should be as a given when the source of input is a TerminalGui() object and
-            # you don't paste.
-            raise Exception('New stdin string in bytes is not length 1')
+        if len(new_stdin_bytes) > 4:
+            raise Exception('New stdin string in bytes must not be longer than 4 bytes')
 
         self.__make_entry(new_stdin_bytes, context_str_bytes)
         self.dataset_file.flush()
@@ -69,6 +65,9 @@ class TerminalDatasetRecorder:
         self.__make_entry(new_stdin_bytes, context_str_bytes)
 
     def __make_entry(self, new_stdin_bytes: bytes, context_str_bytes: bytes):
+        # pad to 4 bytes
+        new_stdin_bytes = new_stdin_bytes.ljust(4, b'\x00')
+
         self.dataset_file.write(new_stdin_bytes)
         self.dataset_file.write(context_str_bytes)
         self.dataset_file.flush()

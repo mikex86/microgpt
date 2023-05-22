@@ -1,13 +1,16 @@
 import torch
 
 from datasethelpers import owtdataset
-from environments.shell.dataset.terminal_dataset_reader import TerminalDatasetReader
+from environments.shell.dataset.terminal_task_dataset import TerminalTaskDataset
 from models.termgpt import TerminalGptModel, TerminalGptConfig
+from tokenization.greedy_tokenizer import GreedyTokenizer
 from train import logging
 from train.logging import set_log_project_name
 from train.training import TrainingConfig, LanguageModelTrainer
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+BATCH_SIZE = 64
 
 
 def main():
@@ -15,24 +18,27 @@ def main():
 
     owtdataset.download_dataset()
 
-    train_ds = TerminalDatasetReader("datasets/terminaldummyds/term_dummy_ds.bin", shuffle=True, balance_factor=0.5)
-    val_ds = TerminalDatasetReader("datasets/terminaldummyds/term_dummy_ds_val.bin", shuffle=True, balance_factor=0.5)
+    tokenizer = GreedyTokenizer.from_json("datasets/codeds/tokenizer.json")
+
+    train_ds = TerminalTaskDataset("datasets/codeds/leetcode.zip", tokenizer, batch_size=BATCH_SIZE)
+    val_ds = TerminalTaskDataset("datasets/codeds/leetcode.zip", tokenizer, batch_size=BATCH_SIZE)
 
     gpt_config = TerminalGptConfig(
         block_size=(train_ds.width + 1) * train_ds.height + 1,
-        n_layers=6,
+        n_layers=12,
+        n_action_detection_layers=2,
         n_heads=8,
         n_embd=64,
         device=device,
         dtype=torch.float32,
-        vocab_size=256,
+        vocab_size=tokenizer.vocab_size,
         dropout=0.0
     )
 
     total_loss_no_action = 0.0
     total_loss_action = 0.0
 
-    n_ministeps = 1
+    n_ministeps = 3
 
     def on_mini_step(
             step: int, mini_step: int,
@@ -61,16 +67,17 @@ def main():
 
         no_action_loss = torch.nn.functional.cross_entropy(no_action_logits.view(-1, logits.size(-1)),
                                                            no_action_y.view(-1))
-        action_loss = torch.nn.functional.cross_entropy(action_logits.view(-1, logits.size(-1)), action_y.view(-1))
 
         total_loss_no_action += no_action_loss.item()
+
+        action_loss = torch.nn.functional.cross_entropy(action_logits.view(-1, logits.size(-1)), action_y.view(-1))
         total_loss_action += action_loss.item()
 
     training_config = TrainingConfig(
         train_dataset_iterator=iter(train_ds),
         val_dataset_iterator=iter(val_ds),
-        batch_size=128,
-        n_mini_steps=1,
+        batch_size=BATCH_SIZE,
+        n_mini_steps=n_ministeps,
 
         min_learning_rate=6e-6,
         max_learning_rate=6e-5,
@@ -88,7 +95,7 @@ def main():
         evaluation_period=50,
         num_evaluation_steps=12,
 
-        checkpoint_dir_path="checkpoints/termgpt/dummyds",
+        checkpoint_dir_path="checkpoints/termgpt/codeds",
 
         hyper_save_memory=False,
 

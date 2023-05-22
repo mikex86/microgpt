@@ -17,6 +17,10 @@ class TerminalGptConfig:
     block_size: int = 1024
     vocab_size: int = 50304  # GPT-2 vocab_size of 50257, padded up to the nearest multiple of 64 for efficiency
     n_layers: int = 12
+
+    # num layers to detect whether to execute the main branch of transformer blocks.
+    # Used for binary classification of whether to return token 0 (no action) or token > 0 (action)
+    n_action_detection_layers: int = 1
     n_heads: int = 12
     n_embd: int = 768
     dropout: float = 0.0
@@ -126,11 +130,13 @@ class TerminalGptModel(ISparselyWeightDecayedModule, ILanguageModel):
         self.wpe = nn.Embedding(config.block_size, config.n_embd, dtype=config.dtype, device=config.device)
         self.drop = nn.Dropout(config.dropout)
 
-        self.action_branch_block = TerminalGptBlock(config)
-        self.action_branch_head = nn.Linear((config.block_size - 1) * config.n_embd, 2,  # binary classifier
-                                            bias=config.bias, device=config.device,
-                                            dtype=config.dtype)
-
+        # self.action_branch_blocks = nn.ModuleList(
+        #     [TerminalGptBlock(config) for _ in range(config.n_action_detection_layers)]
+        # )
+        # self.action_branch_head = nn.Linear((config.block_size - 1) * config.n_embd, 2,  # binary classifier
+        #                                     bias=config.bias, device=config.device,
+        #                                     dtype=config.dtype)
+        #
         self.blocks = nn.ModuleList([TerminalGptBlock(config) for _ in range(config.n_layers)])
         self.ln_f = TerminalGptLayerNorm(config.n_embd, bias=config.bias, device=config.device, dtype=config.dtype)
 
@@ -162,21 +168,30 @@ class TerminalGptModel(ISparselyWeightDecayedModule, ILanguageModel):
         x = self.drop(tok_emb + pos_emb)
 
         # action required detection branch
-        xab = self.action_branch_block(x)
-        xab = xab.view(b, t * self.config.n_embd)
-        xab = self.action_branch_head(xab)
-
-        if requires_action is None:
-            # We are in inference mode, so we need to check if the action branch predicts action
-            # is required, if not, we return zero logprob for tokens not equal to the zero token.
-            # This is a speed-up measure, because we know that the action branch is a binary classifier,
-            # and we can safely return zero logprob for tokens not equal to the zero token.
-            xabs = torch.softmax(xab, dim=1)
-            if torch.all(xabs[:, 0] > 0.5):
-                logits = torch.zeros((b, self.config.vocab_size), device=x.device, dtype=x.dtype)
-                logits[:, 0] = xabs[:, 0]
-
-                return xab, logits
+        # xab = x
+        # for block in self.action_branch_blocks:
+        #     xab = block(xab)
+        # xab = xab.view(b, t * self.config.n_embd)
+        # xab = self.action_branch_head(xab)
+        #
+        # if requires_action is None:
+        #     # We are in inference mode, so we need to check if the action branch predicts action
+        #     # is required, if not, we return zero logprob for tokens not equal to the zero token.
+        #     # This is a speed-up measure, because we know that the action branch is a binary classifier,
+        #     # and we can safely return zero logprob for tokens not equal to the zero token.
+        #     xabs = torch.softmax(xab, dim=1)
+        #     if torch.all(xabs[:, 0] > 0.5):
+        #         logits = torch.zeros((b, self.config.vocab_size), device=x.device, dtype=x.dtype)
+        #         logits[:, 0] = xabs[:, 0]
+        #
+        #         return xab, logits
+        # elif not requires_action:
+        #     # We are in training mode, and we know that the action branch is not required.
+        #     # The logits should be one hot for the result of the action branch classification.
+        #     xabs = torch.softmax(xab, dim=1)
+        #     logits = torch.zeros((b, self.config.vocab_size), device=x.device, dtype=x.dtype)
+        #     logits[:, 0] = xabs[:, 0]
+        #     return xab, logits
 
         # transformer
         for block in self.blocks:
@@ -185,7 +200,8 @@ class TerminalGptModel(ISparselyWeightDecayedModule, ILanguageModel):
         x = self.ln_f(x)
         x = x.view(b, t * self.config.n_embd)
         logits = self.lm_head(x)
-        return xab, logits
+        # return xab, logits
+        return logits
 
     @torch.inference_mode()
     def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], int]) -> None:
@@ -230,19 +246,32 @@ class TerminalGptModel(ISparselyWeightDecayedModule, ILanguageModel):
         self.train()
         device = next(self.parameters()).device
 
-        action_required_probs, logits = self(x, torch.all(targets == 0, dim=1))
+        # any_action_required = torch.any(targets != 0)
 
-        logits_loss = torch.nn.functional.cross_entropy(
+        # action_required_probs, logits = self(x, any_action_required)
+        #
+        # action_required_targets = (targets != 0).long()
+        # action_required_loss = torch.nn.functional.cross_entropy(
+        #     action_required_probs.view(-1, action_required_probs.size(-1)),
+        #     action_required_targets.view(-1),
+        # )
+        #
+        # if any_action_required:
+        #     logits_loss = torch.nn.functional.cross_entropy(
+        #         logits.view(-1, logits.size(-1)),
+        #         targets.view(-1),
+        #         ignore_index=0
+        #     )
+        #     loss = logits_loss + action_required_loss
+        # else:
+        #     loss = action_required_loss
+
+        logits = self(x)
+        loss = torch.nn.functional.cross_entropy(
             logits.view(-1, logits.size(-1)),
             targets.view(-1),
             ignore_index=0
         )
-        action_required_targets = (targets != 0).long()
-        action_required_loss = torch.nn.functional.cross_entropy(
-            action_required_probs.view(-1, action_required_probs.size(-1)),
-            action_required_targets.view(-1),
-        )
-        loss = logits_loss + -np.log(1 / self.config.vocab_size) * action_required_loss
 
         unscaled_loss = loss.item()
 
@@ -251,11 +280,10 @@ class TerminalGptModel(ISparselyWeightDecayedModule, ILanguageModel):
         loss.backward()
 
         logits_copy = logits.detach().clone()
-        logits_copy[:, 0] = 0  # zero out the zero token
-
-        logits_max_value = logits_copy.max()
-        logits_copy[:, 0] = \
-            torch.softmax(action_required_probs, dim=1)[:, 0] * logits_max_value  # sort of make this log probs again
+        # logits_copy[:, 0] = 0  # zero out the zero token
+        #
+        # logits_copy[:, 0] = \
+        #     torch.softmax(action_required_probs, dim=1)[:, 0]
 
         if hyper_save_memory:
             del logits
@@ -268,14 +296,24 @@ class TerminalGptModel(ISparselyWeightDecayedModule, ILanguageModel):
     @torch.no_grad()
     def get_eval_loss(self, x: torch.tensor, y: torch.tensor) -> float:
         self.eval()
-        action_required_probs, logits = self(x)
-        logits_loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1), ignore_index=0)
-        action_required_targets = (y != 0).long()
-        action_required_loss = torch.nn.functional.cross_entropy(
-            action_required_probs.view(-1, action_required_probs.size(-1)),
-            action_required_targets.view(-1),
-        )
-        loss = logits_loss + -np.log(1 / self.config.vocab_size) * action_required_loss
+
+        # action_required_probs, logits = self(x)
+        #
+        # any_action_required = torch.any(y != 0)
+        # if any_action_required:
+        #     logits_loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1), ignore_index=0)
+        # else:
+        #     logits_loss = 0
+        #
+        # action_required_targets = (y != 0).long()
+        # action_required_loss = torch.nn.functional.cross_entropy(
+        #     action_required_probs.view(-1, action_required_probs.size(-1)),
+        #     action_required_targets.view(-1),
+        # )
+        # loss = logits_loss + -np.log(1 / self.config.vocab_size) * action_required_loss
+
+        logits = self(x)
+        loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1), ignore_index=0)
         loss_item = loss.item()
 
         del logits

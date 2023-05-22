@@ -9,9 +9,11 @@ import s3fs
 class Dataset:
 
     @abstractmethod
-    def __iter__(self) -> Iterator[Tuple[torch.Tensor, torch.Tensor]]:
+    def __iter__(self) -> Iterator[Iterator[Tuple[torch.Tensor, torch.Tensor]]]:
         """
-        :return: an iterator over (input, target) pairs
+        :return: an iterator over iterators over (input, target) pairs.
+        It returns an iterator over "sequences" of (input, target) pairs,
+        where each sequence's set of (input, target) pairs must be processed in order as to not distort the dataset.
         """
         pass
 
@@ -25,8 +27,8 @@ class BinaryTokenDataset(Dataset):
     def __iter__(self):
         while True:
             idx = torch.randint(low=0, high=len(self.array) - self.seq_len - 1, size=(1,)).item()
-            yield torch.from_numpy(self.array[idx:idx + self.seq_len].astype(np.int64)), \
-                torch.from_numpy(self.array[idx + 1:idx + self.seq_len + 1].astype(np.int64))
+            yield iter([(torch.from_numpy(self.array[idx:idx + self.seq_len].astype(np.int64)), \
+                         torch.from_numpy(self.array[idx + 1:idx + self.seq_len + 1].astype(np.int64)))])
 
 
 class S3Dataset(Dataset):
@@ -47,5 +49,5 @@ class S3Dataset(Dataset):
                 idx = torch.randint(low=0, high=file_size - self.seq_len - 1, size=(1,)).item()
                 f.seek(idx)
                 arr = np.frombuffer(f.read(self.seq_len), dtype=self.token_dtype)
-                yield torch.from_numpy(arr.astype(np.int64)), \
-                    torch.from_numpy(arr[1:].astype(np.int64))
+                yield iter([(torch.from_numpy(arr.astype(np.int64)), \
+                             torch.from_numpy(arr[1:].astype(np.int64)))])
