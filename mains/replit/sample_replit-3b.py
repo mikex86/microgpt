@@ -7,7 +7,7 @@ from train import checkpointing
 
 
 def main():
-    #device = torch.device('cpu')
+    # device = torch.device('cpu')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     config = ReplitLMConfig(
@@ -27,7 +27,7 @@ def main():
     )
 
     model = ReplitLM(config)
-    checkpointing.load_checkpoint(model, None, 'checkpoints/replit-3b', 'best')
+    checkpointing.load_checkpoint(model, None, 'checkpoints/replit-3b', 'best', load_lazy=True)
 
     tokenizer = SentencePieceTokenizer("checkpoints/replit-3b/tokenizer.model")
     sampler = AutoregressiveSampler(model, tokenizer)
@@ -36,7 +36,6 @@ def main():
 
     sampler.stream_text(
         prompt,
-        # gpt2config.block_size - tokenizer.get_num_tokens(prompt),
         config.max_seq_len,
         lambda token_str: print(token_str, end=''),
         temperature=0.7

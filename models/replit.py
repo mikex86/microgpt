@@ -2,6 +2,7 @@ import math
 from dataclasses import dataclass
 from typing import List, Callable, Optional, Dict
 
+import torch
 import torch.nn
 from einops import rearrange
 from models.moduleapi import BasicLanguageModel

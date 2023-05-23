@@ -8,6 +8,7 @@ from torch.nn import Module, Parameter
 from torch.optim import Optimizer
 
 from train.logging import log_save_checkpoint
+from utils import torchhacks
 
 
 @dataclass
@@ -54,10 +55,13 @@ def save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: st
     _save_checkpoint(model, optimizer, os.path.join(checkpoint_dir_path, checkpoint_name), checkpoint_info)
 
 
-def _load_checkpoint(model: Module, optimizer: Optional[Optimizer], checkpoint_dir_path: str):
+def _load_checkpoint(model: Module, optimizer: Optional[Optimizer], checkpoint_dir_path: str, load_lazy: bool = False):
     model_checkpoint_file = os.path.join(checkpoint_dir_path, "checkpoint.model.pt")
 
-    model_checkpoint = torch.load(model_checkpoint_file, map_location='cpu')
+    if load_lazy:
+        model_checkpoint = torchhacks.lazy_load(model_checkpoint_file)
+    else:
+        model_checkpoint = torch.load(model_checkpoint_file, map_location='cpu')
     model.load_state_dict(model_checkpoint["model_state_dict"]
                           if 'model_state_dict' in model_checkpoint
                           else model_checkpoint)
@@ -74,5 +78,5 @@ def _load_checkpoint(model: Module, optimizer: Optional[Optimizer], checkpoint_d
         torch.cuda.empty_cache()
 
 
-def load_checkpoint(model: Module, optimizer: Optional[Optimizer], checkpoint_dir_path: str, checkpoint_name: str):
-    _load_checkpoint(model, optimizer, os.path.join(checkpoint_dir_path, checkpoint_name))
+def load_checkpoint(model: Module, optimizer: Optional[Optimizer], checkpoint_dir_path: str, checkpoint_name: str, load_lazy: bool = False):
+    _load_checkpoint(model, optimizer, os.path.join(checkpoint_dir_path, checkpoint_name), load_lazy)
