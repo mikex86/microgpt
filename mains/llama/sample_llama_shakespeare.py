@@ -5,7 +5,8 @@ import torch
 from fairscale.nn.model_parallel import initialize_model_parallel
 
 from inference.sampler import AutoregressiveSampler
-from models.llama import LlamaTokenizer, LlamaModel, LlamaConfig
+from models.llama import LlamaModel, LlamaConfig
+from tokenization.sentencepiece_tokenizer import SentencePieceTokenizer
 from train import checkpointing
 
 
@@ -35,7 +36,7 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
     # device = torch.device('cpu')
 
-    tokenizer = LlamaTokenizer(model_path='checkpoints/llama/tokenizer.model')
+    tokenizer = SentencePieceTokenizer(model_path='checkpoints/llama/tokenizer.model')
 
     local_rank, world_size = setup_model_parallel(target_device=device)
 

@@ -58,7 +58,9 @@ def _load_checkpoint(model: Module, optimizer: Optional[Optimizer], checkpoint_d
     model_checkpoint_file = os.path.join(checkpoint_dir_path, "checkpoint.model.pt")
 
     model_checkpoint = torch.load(model_checkpoint_file, map_location='cpu')
-    model.load_state_dict(model_checkpoint["model_state_dict"])
+    model.load_state_dict(model_checkpoint["model_state_dict"]
+                          if 'model_state_dict' in model_checkpoint
+                          else model_checkpoint)
 
     if optimizer is not None:
         device = next(model.parameters()).device  # hack to get the device of the model

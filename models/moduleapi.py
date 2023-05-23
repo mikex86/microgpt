@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from dataclasses import dataclass
 from typing import List, Callable, Tuple
 
@@ -64,4 +64,62 @@ class ILanguageModel(torch.nn.Module):
     @property
     @abstractmethod
     def dtype(self) -> torch.dtype:
+        pass
+
+
+class BasicLanguageModel(ILanguageModel, ABC):
+
+    @torch.inference_mode()
+    def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], int]) -> None:
+        self.eval()
+        device = next(self.parameters()).device
+        tokens = prompt.copy()
+        for _ in range(n_tokens):
+            tokens = tokens[-self.max_seq_length:]  # crop to block size
+            tokens_tensor = torch.tensor(tokens, dtype=torch.long, device=device).unsqueeze(0)
+            logits = self(tokens_tensor)
+            logits = logits[0, -1, :]
+            token = callback(logits)
+            tokens.append(token)
+        self.train()
+
+    def back_propagate(self, x: torch.tensor, targets: torch.tensor, loss_scalar: GradScaler = None,
+                       hyper_save_memory: bool = False) -> Tuple[float, torch.Tensor]:
+        self.train()
+        device = next(self.parameters()).device
+        logits = self(x)
+        loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+
+        unscaled_loss = loss.item()
+
+        if loss_scalar is not None:
+            loss = loss_scalar.scale(loss)
+        loss.backward()
+
+        logits_copy = logits.detach().clone()
+
+        if hyper_save_memory:
+            del logits
+            del loss
+            if device.type == 'cuda':
+                torch.cuda.empty_cache()
+
+        return unscaled_loss, logits_copy
+
+    @torch.no_grad()
+    def get_eval_loss(self, x: torch.tensor, y: torch.tensor) -> float:
+        self.eval()
+        logits = self(x)
+        loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+        loss_item = loss.item()
+
+        del logits
+        del loss
+
+        return loss_item
+
+
+    @property
+    @abstractmethod
+    def max_seq_length(self) -> int:
         pass

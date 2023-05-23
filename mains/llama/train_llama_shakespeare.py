@@ -5,8 +5,9 @@ import torch
 import numpy as np
 from fairscale.nn.model_parallel import initialize_model_parallel
 
-from models.llama import LlamaModel, LlamaTokenizer, LlamaConfig
+from models.llama import LlamaModel, LlamaConfig
 from tokenization.greedy_tokenizer import GreedyTokenizer
+from tokenization.sentencepiece_tokenizer import SentencePieceTokenizer
 from train.training import TrainingConfig, LanguageModelTrainer
 from data.dataset import BinaryTokenDataset
 
@@ -38,7 +39,7 @@ def main():
     )
     # device = torch.device('cpu')
 
-    tokenizer = LlamaTokenizer(model_path='checkpoints/llama/tokenizer.model')
+    tokenizer = SentencePieceTokenizer(model_path='checkpoints/llama/tokenizer.model')
     # tokenizer = GreedyTokenizer.from_json('datasets/shakespeare_char/tokenizer.json')
 
     local_rank, world_size = setup_model_parallel(target_device=device)

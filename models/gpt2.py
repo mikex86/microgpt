@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from torch import nn
 from torch.cuda.amp import GradScaler
 
-from models.moduleapi import ISparselyWeightDecayedModule, WeightDecayGroups, ILanguageModel
+from models.moduleapi import ISparselyWeightDecayedModule, WeightDecayGroups, ILanguageModel, BasicLanguageModel
 from tokenization.tokenizer import Tokenizer
 import tiktoken
 
@@ -117,7 +117,7 @@ class Gpt2Block(torch.nn.Module):
         return x
 
 
-class Gpt2Model(ISparselyWeightDecayedModule, ILanguageModel):
+class Gpt2Model(ISparselyWeightDecayedModule, BasicLanguageModel):
 
     def __init__(self, config: Gpt2Config):
         super().__init__()
@@ -151,20 +151,6 @@ class Gpt2Model(ISparselyWeightDecayedModule, ILanguageModel):
         x = self.ln_f(x)
         return self.lm_head(x)
 
-    @torch.inference_mode()
-    def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], int]) -> None:
-        self.eval()
-        device = next(self.parameters()).device
-        tokens = prompt.copy()
-        for _ in range(n_tokens):
-            tokens = tokens[-self.config.block_size:]  # crop to block size
-            tokens_tensor = torch.tensor(tokens, dtype=torch.long, device=device).unsqueeze(0)
-            logits = self(tokens_tensor)
-            logits = logits[0, -1, :]
-            token = callback(logits)
-            tokens.append(token)
-        self.train()
-
     def get_weight_decay_groups(self) -> WeightDecayGroups:
         all_modules = list(self.named_modules())
         no_weight_decay_params = []
@@ -188,40 +174,9 @@ class Gpt2Model(ISparselyWeightDecayedModule, ILanguageModel):
             no_weight_decay_params=no_weight_decay_params
         )
 
-    def back_propagate(self, x: torch.tensor, targets: torch.tensor, loss_scalar: GradScaler = None,
-                       hyper_save_memory: bool = False) -> Tuple[float, torch.Tensor]:
-        self.train()
-        device = next(self.parameters()).device
-        logits = self(x)
-        loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
-
-        unscaled_loss = loss.item()
-
-        if loss_scalar is not None:
-            loss = loss_scalar.scale(loss)
-        loss.backward()
-
-        logits_copy = logits.detach().clone()
-
-        if hyper_save_memory:
-            del logits
-            del loss
-            if device.type == 'cuda':
-                torch.cuda.empty_cache()
-
-        return unscaled_loss, logits_copy
-
-    @torch.no_grad()
-    def get_eval_loss(self, x: torch.tensor, y: torch.tensor) -> float:
-        self.eval()
-        logits = self(x)
-        loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
-        loss_item = loss.item()
-
-        del logits
-        del loss
-
-        return loss_item
+    @property
+    def max_seq_length(self) -> int:
+        return self.config.block_size
 
     @property
     def dtype(self) -> torch.dtype:

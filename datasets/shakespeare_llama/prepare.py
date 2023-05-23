@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 
-from models.llama import LlamaTokenizer
+from models.llama import SentencePieceTokenizer
 
 if __name__ == '__main__':
     ds_dir = "datasets/shakespeare_llama"
@@ -10,7 +10,7 @@ if __name__ == '__main__':
     f = open(os.path.join(ds_dir, "tiny_shakespeare.txt"), "r")
     text = f.read()
 
-    tokenizer = LlamaTokenizer(model_path='checkpoints/llama/tokenizer.model')
+    tokenizer = SentencePieceTokenizer(model_path='checkpoints/llama/tokenizer.model')
 
     train_tokens = tokenizer.encode(text[:int(len(text) * 0.8)], bos=False, eos=False)
     val_tokens = tokenizer.encode(text[int(len(text) * 0.8):], bos=False, eos=False)
