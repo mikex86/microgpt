@@ -17,3 +17,5 @@ pyglet
 pyyaml
 transformers
 einops
+pyarrow
+requests

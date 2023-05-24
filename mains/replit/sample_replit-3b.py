@@ -36,7 +36,7 @@ def main():
 
     sampler.stream_text(
         prompt,
-        config.max_seq_len,
+        1000,
         lambda token_str: print(token_str, end=''),
         temperature=0.7
     )
