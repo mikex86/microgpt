@@ -19,4 +19,5 @@ transformers
 einops
 pyarrow
 requests
+smart_open
 flask
