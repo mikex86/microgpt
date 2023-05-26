@@ -78,9 +78,9 @@ class ReplitGptMlp(torch.nn.Module):
                  device: torch.device,
                  dtype: torch.dtype):
         super().__init__()
-        self.mlp_up = torch.nn.Linear(d_model, mlp_ratio * d_model, device=device, dtype=dtype, bias=use_bias)
+        self.up_proj = torch.nn.Linear(d_model, mlp_ratio * d_model, device=device, dtype=dtype, bias=use_bias)
         self.mlp_act = torch.nn.GELU(approximate='none')
-        self.mlp_down = torch.nn.Linear(mlp_ratio * d_model, d_model, device=device, dtype=dtype, bias=use_bias)
+        self.down_proj = torch.nn.Linear(mlp_ratio * d_model, d_model, device=device, dtype=dtype, bias=use_bias)
 
     def forward(self, x: torch.Tensor):
         x = self.mlp_up(x)
@@ -227,7 +227,7 @@ class ReplitGptBlock(torch.nn.Module):
                  device: torch.device,
                  dtype: torch.dtype):
         super().__init__()
-        self.ln_1 = LowPrecisionLayerNorm(
+        self.norm_1 = LowPrecisionLayerNorm(
             d_model,
             use_bias=use_bias,
             device=device,
@@ -240,7 +240,7 @@ class ReplitGptBlock(torch.nn.Module):
             device=device,
             dtype=dtype
         )
-        self.ln_2 = LowPrecisionLayerNorm(
+        self.norm_2 = LowPrecisionLayerNorm(
             d_model,
             use_bias=use_bias,
             device=device,
@@ -317,7 +317,7 @@ class ReplitLM(BasicLanguageModel):
                     dtype=config.dtype,
                 ) for _ in range(self.config.n_layers)
             ]),
-            ln_f=LowPrecisionLayerNorm(
+            norm_f=LowPrecisionLayerNorm(
                 config.d_model,
                 use_bias=config.use_bias,
                 device=config.device,

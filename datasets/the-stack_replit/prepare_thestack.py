@@ -43,7 +43,7 @@ s3_prefix = 'the-stack-replit'
 
 def process_parquet_url(parquet_url: str):
     lang_name = parquet_url.split("/")[-2]
-    index = int(parquet_url.split("-")[-1].split(".")[0])
+    index = int(parquet_url.split("-")[-3])
 
     train_file_path = f"train-{lang_name}-{index}.bin"
     val_file_path = f"val-{lang_name}-{index}.bin"
@@ -101,7 +101,7 @@ def main():
     print(f"Downloading {len(parquet_urls)} parquet files")
 
     # multiprocessing
-    num_workers = multiprocessing.cpu_count()
+    num_workers = multiprocessing.cpu_count() * 4
     results = []
     with multiprocessing.get_context('spawn').Pool(num_workers) as pool:
         result = list(tqdm(pool.imap(process_parquet_url, parquet_urls), total=len(parquet_urls),
