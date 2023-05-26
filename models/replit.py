@@ -83,9 +83,9 @@ class ReplitGptMlp(torch.nn.Module):
         self.down_proj = torch.nn.Linear(mlp_ratio * d_model, d_model, device=device, dtype=dtype, bias=use_bias)
 
     def forward(self, x: torch.Tensor):
-        x = self.mlp_up(x)
+        x = self.up_proj(x)
         x = self.mlp_act(x)
-        x = self.mlp_down(x)
+        x = self.down_proj(x)
         return x
 
 
@@ -247,7 +247,7 @@ class ReplitGptBlock(torch.nn.Module):
             dtype=dtype
         )
 
-        self.mlp = ReplitGptMlp(
+        self.ffn = ReplitGptMlp(
             d_model=d_model,
             mlp_ratio=mlp_ratio,
             use_bias=use_bias,
@@ -261,11 +261,11 @@ class ReplitGptBlock(torch.nn.Module):
     def forward(self, x: torch.Tensor,
                 attn_bias: torch.Tensor,
                 kv_cache: Optional[ReplitKVCache] = None) -> torch.Tensor:
-        a = self.ln_1(x)
+        a = self.norm_1(x)
         b = self.attn(a, attn_bias, kv_cache)
         x = x + self.resid_attn_dropout(b)
-        m = self.ln_2(x)
-        n = self.mlp(m)
+        m = self.norm_2(x)
+        n = self.ffn(m)
         x = x + self.resid_mlp_dropout(n)
         return x
 
@@ -344,7 +344,7 @@ class ReplitLM(BasicLanguageModel):
         for block in self.transformer.blocks:
             x = block(x, attn_bias, kv_cache)
 
-        x = self.transformer.ln_f(x)
+        x = self.transformer.norm_f(x)
 
         return torch.nn.functional.linear(x, self.transformer.wte.weight, None)
 
