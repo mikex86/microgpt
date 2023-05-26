@@ -12,7 +12,7 @@ def get_optimal_batch_size(model: ILanguageModel, tokenizer: Tokenizer, device: 
     print("Determining optimal batch size...")
     batch_list = []
 
-    n_trials = 2
+    n_trials = 5
 
     highest_throughput_batch_size = 0
     prev_highest_throughput = 0
