@@ -97,12 +97,14 @@ def main():
     # remove languages that are not important
     parquet_urls = list(filter(lambda x: language_importance.get(x.split("/")[-2], 0) > 0, parquet_urls))
 
+    parquet_urls = [parquet_urls[15]]
+
     # multiprocessing
     num_workers = multiprocessing.cpu_count()
     results = []
     with multiprocessing.get_context('spawn').Pool(num_workers) as pool:
         with tqdm(total=len(parquet_urls), desc="Downloading bigcode/the-stack", unit="parquet files") as pbar:
-            def update_progress():
+            def update_progress(x):
                 pbar.update()
 
             result = pool.map_async(process_parquet_url, parquet_urls, callback=update_progress)
