@@ -28,7 +28,8 @@ TOKEN_BUFFER_SIZE = 10000
 
 def _flush_token_buffer(token_buffer, out_file):
     token_np_array = np.array(token_buffer, dtype=np.uint16)
-    token_np_array.tofile(out_file)
+    token_bytes = token_np_array.tobytes()
+    out_file.write(token_bytes)
     out_file.flush()
     token_buffer.clear()
 
