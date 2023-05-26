@@ -1,7 +1,7 @@
 import json
 import multiprocessing
 import os
-from typing import List, Tuple
+from typing import List
 
 import numpy as np
 import s3fs as s3fs
@@ -99,7 +99,7 @@ def main():
     # multiprocessing
     num_workers = multiprocessing.cpu_count()
     results = []
-    with multiprocessing.Pool(num_workers) as pool:
+    with multiprocessing.get_context('spawn').Pool(num_workers) as pool:
         with tqdm(total=len(parquet_urls), desc="Downloading bigcode/the-stack", unit="parquet files") as pbar:
             def update_progress():
                 pbar.update()
