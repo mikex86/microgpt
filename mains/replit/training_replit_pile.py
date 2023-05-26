@@ -9,13 +9,13 @@ from train.logging import set_log_project_name
 from train.training import TrainingConfig, LanguageModelTrainer
 from data.dataset import BinaryTokenDataset
 
+from lora import lora
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def main():
     set_log_project_name("replit-tstk")
-
-    owtdataset.download_dataset()
 
     config = ReplitLMConfig(
         d_model=2560,
@@ -72,6 +72,9 @@ def main():
         hyper_save_memory=False
     )
     model = ReplitLM(config)
+
+    # lora.lorify_module(model, 1, 1, torch.bfloat16)
+
     trainer = LanguageModelTrainer(model, training_config)
     trainer.train()
 

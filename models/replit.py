@@ -42,7 +42,7 @@ class LowPrecisionLayerNorm(torch.nn.LayerNorm):
         if not use_bias:
             self.bias = None
 
-    def forward(self, x: torch.tensor):
+    def forward(self, x: torch.Tensor):
         device = x.device
 
         downcast_x = _cast_if_autocast_enabled(x)
@@ -55,7 +55,7 @@ class LowPrecisionLayerNorm(torch.nn.LayerNorm):
             return torch.nn.functional.layer_norm(downcast_x, self.normalized_shape, downcast_weight, downcast_bias)
 
 
-def _cast_if_autocast_enabled(tensor: torch.tensor) -> torch.tensor:
+def _cast_if_autocast_enabled(tensor: Optional[torch.Tensor]) -> Optional[torch.Tensor]:
     if tensor is None:
         return None
     if torch.is_autocast_enabled():
@@ -132,9 +132,9 @@ class MultiHeadAttention(torch.nn.Module):
 
         self.out_proj = torch.nn.Linear(self.d_model, self.d_model, device=device, dtype=dtype, bias=use_bias)
 
-    def forward(self, x: torch.tensor,
-                attn_bias: torch.tensor,
-                kv_cache: Optional[ReplitKVCache]) -> torch.tensor:
+    def forward(self, x: torch.Tensor,
+                attn_bias: torch.Tensor,
+                kv_cache: Optional[ReplitKVCache]) -> torch.Tensor:
         b, t, _ = x.shape
 
         qkv = self.Wqkv(x)
@@ -162,9 +162,9 @@ class MultiHeadAttention(torch.nn.Module):
 
 
 def _scaled_multihead_dot_product_attention(
-        query: torch.tensor,
-        key: torch.tensor,
-        value: torch.tensor,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
         n_heads,
         softmax_scale=None,
         attn_bias=None,
@@ -258,9 +258,9 @@ class ReplitGptBlock(torch.nn.Module):
         self.resid_attn_dropout = torch.nn.Dropout(resid_pdrop)
         self.resid_mlp_dropout = torch.nn.Dropout(resid_pdrop)
 
-    def forward(self, x: torch.tensor,
-                attn_bias: torch.tensor,
-                kv_cache: Optional[ReplitKVCache] = None) -> torch.tensor:
+    def forward(self, x: torch.Tensor,
+                attn_bias: torch.Tensor,
+                kv_cache: Optional[ReplitKVCache] = None) -> torch.Tensor:
         a = self.ln_1(x)
         b = self.attn(a, attn_bias, kv_cache)
         x = x + self.resid_attn_dropout(b)
@@ -287,7 +287,7 @@ class AlibiPositionalEmbeddings:
 
         self.alibi_bias = alibi_bias * (1. / (2 ** m.view(1, n_heads, 1, 1)))
 
-    def make_for_seq(self, current_seq_length: int, start_pos: int = 0) -> torch.tensor:
+    def make_for_seq(self, current_seq_length: int, start_pos: int = 0) -> torch.Tensor:
         return self.alibi_bias[:, :, :, -current_seq_length - start_pos:]
 
 
@@ -332,7 +332,7 @@ class ReplitLM(BasicLanguageModel):
             config.dtype
         )
 
-    def forward(self, x: torch.tensor, kv_cache: Optional[ReplitKVCache] = None, start_pos: int = 0) -> torch.tensor:
+    def forward(self, x: torch.Tensor, kv_cache: Optional[ReplitKVCache] = None, start_pos: int = 0) -> torch.tensor:
         b, t = x.size()
         assert t <= self.config.max_seq_len, f'Cannot forward input with seq_len={t}, this model only supports seq_len<={self.config.max_seq_len}'
 
@@ -348,7 +348,7 @@ class ReplitLM(BasicLanguageModel):
 
         return torch.nn.functional.linear(x, self.transformer.wte.weight, None)
 
-    def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], int]) -> None:
+    def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.Tensor], int]) -> None:
         self.eval()
         device = next(self.parameters()).device
         tokens = prompt.copy()

@@ -82,3 +82,9 @@ def log_error(e: BaseException):
     traceback.print_exc()
     if LOG_TO_WANDB:
         wandb.alert(title="Error", text=str(e) + "\n" + traceback.format_exc())
+
+
+def log_oom(step: int):
+    print(f"ERROR: Out of memory at step {step}!")
+    if LOG_TO_WANDB:
+        wandb.alert(title="Out of memory", text=f"Out of memory at step {step}!")

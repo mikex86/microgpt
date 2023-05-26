@@ -4,6 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+        
         {
             "name": "Python: Current File",
             "type": "python",
@@ -17,6 +18,30 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/mains/replit/serve_replit.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": true
+        },
+        {
+            "name": "Python: training_replit",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/mains/replit/training_replit_pile.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": true
+        },
+        {
+            "name": "Python: sample_replit",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/mains/replit/sample_replit-3b.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "env": {

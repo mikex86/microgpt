@@ -173,10 +173,27 @@ class LanguageModelTrainer:
                     nan_loss_recovery = False
                     for ministep in range(self.training_config.n_mini_steps):
                         with self.autocast_ctx:
-                            loss, logits = self.model.back_propagate(
-                                x, y,
-                                self.scalar, self.training_config.hyper_save_memory
-                            )
+                            try:
+                                loss, logits = self.model.back_propagate(
+                                    x, y,
+                                    self.scalar, self.training_config.hyper_save_memory
+                                )
+                            except RuntimeError as e:
+                                if "CUDA out of memory" in str(e):
+                                    logging.log_oom(self.current_step)
+                                    # free as much memory as possible after OOM
+                                    torch.cuda.empty_cache()
+                                    # try to recover from OOM
+                                    self.model.zero_grad(set_to_none=True)
+                                    # load latest checkpoint
+                                    checkpointing.load_checkpoint(
+                                        self.model, self.optimizer,
+                                        self.training_config.checkpoint_dir_path, "latest"
+                                    )
+                                    nan_loss_recovery = True
+                                    break
+                                else:
+                                    raise e
 
                             if self.training_config.mini_step_listener is not None:
                                 self.training_config.mini_step_listener(self.current_step, ministep, loss, x, y, logits)

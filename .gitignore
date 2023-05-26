@@ -1,3 +1,5 @@
 .venv/
 checkpoints/
 **/__pycache__/
+
+*.bin
