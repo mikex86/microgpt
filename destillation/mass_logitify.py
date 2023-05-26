@@ -81,9 +81,9 @@ def logitify_targets(model: ILanguageModel, tokenizer: Tokenizer,
 
     model.eval()
 
-    array = np.memmap(targets_file_path, mode="r", dtype=token_dtype)
-    num_tokens = len(array)
-    num_blocks = num_tokens // block_size
+    # array = np.memmap(targets_file_path, mode="r", dtype=token_dtype)
+    # num_tokens = len(array)
+    # num_blocks = num_tokens // block_size
 
     batch_size = get_optimal_batch_size(model, tokenizer, device, block_size)
 

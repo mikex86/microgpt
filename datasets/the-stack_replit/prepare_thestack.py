@@ -1,6 +1,7 @@
 import json
 import multiprocessing
 import os
+import time
 from typing import List
 
 import numpy as np
@@ -92,35 +93,20 @@ BUFFER_SIZE = 65536 * 16
 
 
 def main():
-    parquet_urls = list_parquet_files("bigcode/the-stack-dedup", patterns=["**/data-00000-of-*.parquet"])
+    parquet_urls = list_parquet_files("bigcode/the-stack-dedup", patterns=["**/data-0000*-of-*.parquet"])
 
     # remove languages that are not important
     parquet_urls = list(filter(lambda x: language_importance.get(x.split("/")[-2], 0) > 0, parquet_urls))
 
-    parquet_urls = [parquet_urls[15]]
+    print(f"Downloading {len(parquet_urls)} parquet files")
 
     # multiprocessing
     num_workers = multiprocessing.cpu_count()
     results = []
     with multiprocessing.get_context('spawn').Pool(num_workers) as pool:
-        with tqdm(total=len(parquet_urls), desc="Downloading bigcode/the-stack", unit="parquet files") as pbar:
-            def update_progress(x):
-                pbar.update()
-
-            result = pool.map_async(process_parquet_url, parquet_urls, callback=update_progress)
-            results.append(result)
-
-        # wait for all the results to finish
-        for result in results:
-            result.wait()
-
-        # check for errors
-        for result in results:
-            if result.successful():
-                continue
-            else:
-                print("Error in multiprocessing")
-                print(result.get())
+        result = list(tqdm(pool.imap(process_parquet_url, parquet_urls), total=len(parquet_urls),
+                      desc="Downloading bigcode/the-stack", unit="parquet files"))
+        results.append(result)
 
 
 if __name__ == '__main__':
