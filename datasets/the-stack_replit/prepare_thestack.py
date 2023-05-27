@@ -1,6 +1,7 @@
 import json
 import multiprocessing
 import os
+import sys
 import time
 import traceback
 from dataclasses import dataclass
@@ -145,6 +146,14 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
         progress_queue.put(DestroyProgressBarMessage(task_id))
 
 
+error_file = open("errors.txt", "w")
+
+
+def print_err(string: str):
+    error_file.write(string + "\n")
+    error_file.flush()
+
+
 def main():
     multiprocessing.set_start_method("spawn", force=True)
 
@@ -204,7 +213,7 @@ def main():
                         if task is not None:
                             jobs_progress.update(task, completed=new_message.n_current_progress)
                         else:
-                            overall_progress.print(
+                            print_err(
                                 f"Error: Received progress message for unknown task {new_message.task_id}")
 
                     elif isinstance(new_message, DestroyProgressBarMessage):
@@ -214,7 +223,7 @@ def main():
                             jobs_progress.remove_task(task)
                             del tasks[new_message.task_id]
                         else:
-                            overall_progress.print(
+                            print_err(
                                 f"Error: Received progress message for unknown task {new_message.task_id}")
 
                     elif isinstance(new_message, ErrorMessage):
@@ -222,15 +231,15 @@ def main():
                         if task is not None:
                             jobs_progress.remove_task(task)
                             del tasks[new_message.task_id]
-                            overall_progress.print(f"Error from task ${new_message.task_id}: {new_message.error}")
+                            print_err(f"Error from task ${new_message.task_id}: {new_message.error}")
                         else:
-                            overall_progress.print(
+                            print_err(
                                 f"Error: from unknown task {new_message.task_id}: {new_message.error}")
 
                         # print stacktrace
                         tb_list = traceback.extract_tb(new_message.error.__traceback__)
                         for item in traceback.StackSummary.from_list(tb_list).format():
-                            overall_progress.print(item)
+                            print_err(item)
 
                 time.sleep(0.1)
 
