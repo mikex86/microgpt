@@ -146,6 +146,8 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
 
 
 def main():
+    multiprocessing.set_start_method("spawn", force=True)
+
     parquet_urls = list_parquet_files("bigcode/the-stack-dedup", patterns=["**/data-0000*-of-*.parquet"])
 
     # remove languages that are not important
@@ -184,7 +186,6 @@ def main():
         )
     )
 
-    multiprocessing.set_start_method("spawn")
     with ProcessPoolExecutor(num_workers) as executor:
         for parquet_url in parquet_urls:
             results.append(executor.submit(process_parquet_url, (parquet_url, progress_queue)))
