@@ -171,7 +171,7 @@ def main():
     print(f"Downloading {len(parquet_urls)} parquet files")
 
     # multiprocessing
-    num_workers = 1
+    num_workers = multiprocessing.cpu_count() * 2
 
     tasks = {}
 
