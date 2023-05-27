@@ -12,6 +12,10 @@ class ParquetStreamer:
         self.observed_rows = observed_rows
 
         fp = smart_open.open(self.parquet_url, "rb", transport_params={'headers': self.headers if self.headers else {}})
+        parquet_dataset = pq.ParquetDataset(fp)
+
+        self.num_rows = sum(p.count_rows() for p in parquet_dataset.fragments)
+
         self.parquet_file = pq.ParquetFile(fp)
 
     def __iter__(self):
@@ -24,6 +28,9 @@ class ParquetStreamer:
             for row_index in range(row_group.num_rows):
                 row = {column_name: column[row_index].as_py() for column_name, column in columns.items()}
                 yield row
+
+    def __len__(self):
+        return self.num_rows
 
     def __enter__(self):
         return self

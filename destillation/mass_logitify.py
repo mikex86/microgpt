@@ -200,10 +200,7 @@ def logitify_targets(model: ILanguageModel, tokenizer: Tokenizer,
 
     num_blocks = token_budget // block_size
 
-    # train_it = prefetching_iterator(
-    #     block_iterator(dataset_s3_folder, block_size, True, tokenizer, token_dtype),
-    #     num_prefetch=batch_size * num_prefetch_batches
-    # )
+    # train_it = block_iterator(dataset_s3_folder, block_size, True, tokenizer, token_dtype)
     train_it = parallel_block_iterator(dataset_s3_folder, block_size, True, tokenizer, token_dtype,
                                        num_workers,
                                        blocks_in_flight)

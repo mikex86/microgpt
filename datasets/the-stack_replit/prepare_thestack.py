@@ -2,17 +2,23 @@ import json
 import multiprocessing
 import os
 import time
+import traceback
+from dataclasses import dataclass
 from typing import List
 
 import numpy as np
 import s3fs as s3fs
-from tqdm import tqdm
+from datasets.data_files import DataFilesList
+from huggingface_hub import HfApi
 
 from robustdatasets.parquet_streamer import ParquetStreamer
 from tokenization.sentencepiece_tokenizer import SentencePieceTokenizer
-from huggingface_hub import HfApi
 
-from datasets.data_files import DataFilesList
+from rich.progress import Table, Progress, BarColumn, TextColumn, TimeRemainingColumn
+from rich.panel import Panel
+from rich.live import Live
+
+from utils.multithreading_madness import ProcessPoolExecutor
 
 language_importance = json.load(open("language_importance.json", "r"))
 
@@ -41,7 +47,34 @@ s3_bucket = 'micro-gpt-datasets-us'
 s3_prefix = 'the-stack-replit'
 
 
-def process_parquet_url(parquet_url: str):
+class Message:
+    pass
+
+
+@dataclass
+class CreateProgressBarMessage(Message):
+    task_id: str
+    n_total: int
+
+
+@dataclass
+class SetProgressMessage(Message):
+    task_id: str
+    n_current_progress: int
+
+
+@dataclass
+class DestroyProgressBarMessage(Message):
+    task_id: str
+
+
+@dataclass
+class ErrorMessage(Message):
+    task_id: str
+    error: Exception
+
+
+def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue):
     try:
         lang_name = parquet_url.split("/")[-2]
         index = int(parquet_url.split("-")[-3])
@@ -53,8 +86,10 @@ def process_parquet_url(parquet_url: str):
         val_s3_key = f"{s3_bucket}/{s3_prefix}/{val_file_path}"
 
         if s3.exists(train_s3_key) and s3.exists(val_s3_key):
-            print(f"Skipping {train_file_path} because it already exists")
+            print(f"Skipping {train_file_path}/{val_s3_key} because it already exists")
             return
+
+        print(f"Processing {train_s3_key}/{val_s3_key}...")
 
         tokenizer = SentencePieceTokenizer("replit_tokenizer.model")
         streamer = ParquetStreamer(
@@ -68,12 +103,26 @@ def process_parquet_url(parquet_url: str):
 
         s3.touch(train_s3_key, create_parents=True)
         s3.touch(val_s3_key, create_parents=True)
+
         with s3.open(train_s3_key, "wb") as train_file:
             with s3.open(val_s3_key, "wb") as val_file:
+                n_rows = len(streamer)
+
+                task_id = f"{lang_name}-{index}"
+
+                # start new progress bar
+                progress_queue.put(CreateProgressBarMessage(task_id, n_rows))
+
+                row_idx = 0
+
                 for row in streamer:
                     goes_to_val = np.random.random() < 0.01
                     content = row['content']
                     tokens = tokenizer.encode(content, eos=True)
+
+                    # update progress bar
+                    progress_queue.put(SetProgressMessage(task_id, row_idx))
+                    row_idx += 1
 
                     if goes_to_val:
                         val_token_buffer.extend(tokens)
@@ -87,13 +136,13 @@ def process_parquet_url(parquet_url: str):
                 _flush_token_buffer(train_token_buffer, train_file)
                 _flush_token_buffer(val_token_buffer, val_file)
 
+        print(f"Finished processing {train_file_path}")
+        progress_queue.put(DestroyProgressBarMessage(task_id))
         return train_file_path, val_file_path
     except Exception as e:
         print(f"Error processing {parquet_url}: {e}")
-
-
-
-BUFFER_SIZE = 65536 * 16
+        progress_queue.put(ErrorMessage(task_id, e))
+        progress_queue.put(DestroyProgressBarMessage(task_id))
 
 
 def main():
@@ -105,12 +154,83 @@ def main():
     print(f"Downloading {len(parquet_urls)} parquet files")
 
     # multiprocessing
-    num_workers = multiprocessing.cpu_count() * 2
+    num_workers = multiprocessing.cpu_count() * 4
+
+    tasks = {}
+
     results = []
-    with multiprocessing.get_context('spawn').Pool(num_workers) as pool:
-        result = list(tqdm(pool.imap(process_parquet_url, parquet_urls), total=len(parquet_urls),
-                           desc="Downloading bigcode/the-stack", unit="parquet files"))
-        results.append(result)
+
+    # progress message socket.
+    # Used by subprocesses to communicate progress to the main process.
+    progress_queue = multiprocessing.Queue()
+
+    overall_progress = Progress()
+    overall_task = overall_progress.add_task("All Jobs", total=len(parquet_urls))
+
+    jobs_progress = Progress(
+        "{task.description}",
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeRemainingColumn(),
+    )
+
+    progress_table = Table.grid()
+    progress_table.add_row(
+        Panel.fit(
+            overall_progress, title="Overall Progress", border_style="green", padding=(1, 1)
+        )
+    )
+    progress_table.add_row(
+        Panel.fit(jobs_progress, title="[b]Jobs", border_style="red", padding=(1, 1))
+    )
+
+    with ProcessPoolExecutor(num_workers) as executor:
+        for parquet_url in parquet_urls:
+            results.append(executor.submit(process_parquet_url, (parquet_url, progress_queue)))
+
+        with Live(progress_table, refresh_per_second=10):
+            while True:
+                new_message = progress_queue.get() if not progress_queue.empty() else None
+
+                if new_message is not None:
+                    if isinstance(new_message, CreateProgressBarMessage):
+                        task = jobs_progress.add_task(new_message.task_id, total=new_message.n_total)
+                        tasks[new_message.task_id] = task
+
+                    elif isinstance(new_message, SetProgressMessage):
+                        task = tasks[new_message.task_id]
+                        if task is not None:
+                            jobs_progress.update(task, completed=new_message.n_current_progress)
+                        else:
+                            print(f"Error: Received progress message for unknown task {new_message.task_id}")
+
+                    elif isinstance(new_message, DestroyProgressBarMessage):
+                        task = tasks[new_message.task_id]
+                        if task is not None:
+                            overall_progress.advance(overall_task, 1)
+                            jobs_progress.remove_task(task)
+                            del tasks[new_message.task_id]
+                        else:
+                            print(f"Error: Received progress message for unknown task {new_message.task_id}")
+
+                    elif isinstance(new_message, ErrorMessage):
+                        task = tasks[new_message.task_id]
+                        if task is not None:
+                            jobs_progress.remove_task(task)
+                            del tasks[new_message.task_id]
+                            print(f"Error from task ${new_message.task_id}: {new_message.error}")
+                            traceback.print_tb(new_message.error.__traceback__)
+
+                        else:
+                            print(f"Error: from unknown task {new_message.task_id}: {new_message.error}")
+                            traceback.print_tb(new_message.error.__traceback__)
+
+                time.sleep(0.1)
+
+                # break if all tasks are done
+                all_done = all(result.is_finished for result in results)
+                if all_done:
+                    break
 
 
 if __name__ == '__main__':

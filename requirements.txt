@@ -21,3 +21,4 @@ pyarrow
 requests
 smart_open
 flask
+rich
