@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from typing import List
 
 
@@ -18,4 +18,12 @@ class Tokenizer:
     @property
     @abstractmethod
     def vocab_size(self) -> int:
+        pass
+
+
+class TerminatedTokenizer(Tokenizer, ABC):
+
+    @property
+    @abstractmethod
+    def eot_token(self) -> int:
         pass

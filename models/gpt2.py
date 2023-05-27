@@ -1,13 +1,12 @@
-from typing import List, Callable, Tuple
+from typing import List
 
 import torch.nn
 from dataclasses import dataclass
 
 from torch import nn
-from torch.cuda.amp import GradScaler
 
-from models.moduleapi import ISparselyWeightDecayedModule, WeightDecayGroups, ILanguageModel, BasicLanguageModel
-from tokenization.tokenizer import Tokenizer
+from models.moduleapi import ISparselyWeightDecayedModule, WeightDecayGroups, BasicLanguageModel
+from tokenization.tokenizer import TerminatedTokenizer
 import tiktoken
 
 
@@ -183,7 +182,7 @@ class Gpt2Model(ISparselyWeightDecayedModule, BasicLanguageModel):
         return self.config.dtype
 
 
-class Gpt2Tokenizer(Tokenizer):
+class Gpt2Tokenizer(TerminatedTokenizer):
 
     def __init__(self):
         self.tokenizer = tiktoken.get_encoding("gpt2")
@@ -197,3 +196,7 @@ class Gpt2Tokenizer(Tokenizer):
     @property
     def vocab_size(self) -> int:
         return self.tokenizer.n_vocab
+
+    @property
+    def eot_token(self) -> int:
+        return self.tokenizer.eot_token

@@ -6,6 +6,11 @@ from models.replit import ReplitLMConfig, ReplitLM
 from tokenization.sentencepiece_tokenizer import SentencePieceTokenizer
 from train import checkpointing
 
+s3_bucket = 'micro-gpt-datasets-us'
+s3_prefix = 'the-stack-replit'
+
+TOKEN_BUDGET = 25 * 10 ** 9
+
 
 def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -31,7 +36,10 @@ def main():
 
     tokenizer = SentencePieceTokenizer("checkpoints/replit-3b/tokenizer.model")
 
-    mass_logitify.logitify_targets(model, tokenizer, config.max_seq_len, device, "datasets/the-stack_replit/train-c-126.bin", np.uint16)
+    batch_size = 4  # optimal for RTX 4090
+
+    mass_logitify.logitify_targets(model, tokenizer, config.max_seq_len, batch_size, TOKEN_BUDGET, device,
+                                   f"{s3_bucket}/{s3_prefix}", np.uint16)
 
 
 if __name__ == '__main__':

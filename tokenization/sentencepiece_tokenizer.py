@@ -3,10 +3,10 @@ from typing import List
 
 from sentencepiece import SentencePieceProcessor
 
-from tokenization.tokenizer import Tokenizer
+from tokenization.tokenizer import TerminatedTokenizer
 
 
-class SentencePieceTokenizer(Tokenizer):
+class SentencePieceTokenizer(TerminatedTokenizer):
 
     def __init__(self, model_path: str):
         # reload tokenizer
@@ -35,3 +35,7 @@ class SentencePieceTokenizer(Tokenizer):
     @property
     def vocab_size(self) -> int:
         return self.n_words
+
+    @property
+    def eot_token(self) -> int:
+        return self.eos_id

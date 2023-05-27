@@ -1,0 +1,136 @@
+# NVIDIA A40
+Batch size: 1, time: 463.381005859375 ms, throughput: 4419.689141556049 tokens/s
+Batch size: 2, time: 666.918115234375 ms, throughput: 6141.683523711967 tokens/s
+Batch size: 3, time: 1006.24208984375 ms, throughput: 6105.886507842307 tokens/s
+Batch size: 4, time: 1274.73994140625 ms, throughput: 6426.408817913764 tokens/s
+Batch size: 5, time: 1582.15986328125 ms, throughput: 6472.165194965323 tokens/s
+Batch size: 6, time: 1900.816015625 ms, throughput: 6464.591995748537 tokens/s
+Batch size: 7, time: 2221.4568359375 ms, throughput: 6453.422712555167 tokens/s
+Batch size: 8, time: 2546.853515625 ms, throughput: 6433.035861498832 tokens/s
+Batch size: 9, time: 2876.6416015625 ms, throughput: 6407.471820607866 tokens/s
+Batch size: 10, time: 3198.4029296875 ms, throughput: 6403.195735567 tokens/s
+Batch size: 11, time: 3517.5671875 ms, throughput: 6404.426354684946 tokens/s
+Batch size: 12, time: 3891.34375 ms, throughput: 6315.556162315395 tokens/s
+Batch size: 13, time: 4177.64140625 ms, throughput: 6372.973984834819 tokens/s
+Batch size: 14, time: 4498.300390625 ms, throughput: 6373.962943816715 tokens/s
+Batch size: 15, time: 4828.237109375 ms, throughput: 6362.570707298302 tokens/s
+Batch size: 16, time: 5188.370703125 ms, throughput: 6315.6628303878815 tokens/s
+Batch size: 17, time: 5514.816796875 ms, throughput: 6313.174359614025 tokens/s
+Batch size: 18, time: 5824.764453125 ms, throughput: 6328.839611741274 tokens/s
+Batch size: 19, time: 6180.767578125 ms, throughput: 6295.658186164049 tokens/s
+Batch size: 20, time: 6485.930859375 ms, throughput: 6315.207622171138 tokens/s
+Batch size: 21, time: 6803.66171875 ms, throughput: 6321.301936790242 tokens/s
+Batch size: 22, time: 7160.68046875 ms, throughput: 6292.1394407458 tokens/s
+Batch size: 23, time: 7484.0 ms, throughput: 6293.960448957777 tokens/s
+Batch size: 24, time: 7837.49921875 ms, throughput: 6271.388184946988 tokens/s
+Batch size: 25, time: 8191.34609375 ms, throughput: 6250.498930702685 tokens/s
+
+# NVIDIA A100 40GB
+Batch size: 1, time: 1356.368408203125 ms, throughput: 1509.9142589977653 tokens/s
+Batch size: 2, time: 350.4583740234375 ms, throughput: 11687.55065823045 tokens/s
+Batch size: 3, time: 524.6878662109375 ms, throughput: 11709.819105155291 tokens/s
+Batch size: 4, time: 692.1200561523438 ms, throughput: 11836.09682623739 tokens/s
+Batch size: 5, time: 870.6124877929688 ms, throughput: 11761.834505680865 tokens/s
+Batch size: 6, time: 1045.82763671875 ms, throughput: 11749.546071045892 tokens/s
+Batch size: 7, time: 1224.141357421875 ms, throughput: 11711.065812033827 tokens/s
+Batch size: 8, time: 1396.36328125 ms, throughput: 11733.336317275065 tokens/s
+Batch size: 9, time: 1586.05419921875 ms, throughput: 11621.292645030122 tokens/s
+Batch size: 10, time: 1751.22021484375 ms, throughput: 11694.702828580184 tokens/s
+Batch size: 11, time: 2050.419189453125 ms, throughput: 10987.02163727239 tokens/s
+Batch size: 12, time: 2148.052490234375 ms, throughput: 11441.06119926264 tokens/s
+Batch size: 13, time: 2299.119140625 ms, throughput: 11580.087142749135 tokens/s
+Batch size: 14, time: 2459.1630859375 ms, throughput: 11659.251134647482 tokens/s
+Batch size: 15, time: 2759.412109375 ms, throughput: 11132.806113168072 tokens/s
+Batch size: 16, time: 2845.80859375 ms, throughput: 11514.477843648896 tokens/s
+Batch size: 17, time: 3007.110107421875 ms, throughput: 11577.893311611811 tokens/s
+Batch size: 18, time: 3499.189697265625 ms, throughput: 10535.010442219427 tokens/s
+Batch size: 19, time: 3385.461669921875 ms, throughput: 11493.8533629589 tokens/s
+Batch size: 20, time: 3578.265625 ms, throughput: 11446.886366911345 tokens/s
+Batch size: 21, time: 4002.18310546875 ms, throughput: 10746.135013471043 tokens/s
+Batch size: 22, time: 3943.63330078125 ms, throughput: 11424.997347262035 tokens/s
+Batch size: 23, time: 4386.6728515625 ms, throughput: 10737.978781167121 tokens/s
+Batch size: 24, time: 4321.35693359375 ms, throughput: 11374.205083106604 tokens/s
+Batch size: 25, time: 4835.89892578125 ms, throughput: 10587.483482552012 tokens/s
+Batch size: 26, time: 4666.9150390625 ms, throughput: 11409.678460891066 tokens/s
+Batch size: 27, time: 5126.0498046875 ms, throughput: 10787.253754232888 tokens/s
+Batch size: 28, time: 5049.9521484375 ms, throughput: 11355.355123066412 tokens/s
+Batch size: 29, time: 5621.6044921875 ms, throughput: 10564.955269005266 tokens/s
+Batch size: 30, time: 5462.12939453125 ms, throughput: 11248.36040345629 tokens/s
+Batch size: 31, time: 6036.97802734375 ms, throughput: 10516.519972814032 tokens/s
+Batch size: 32, time: 6066.3427734375 ms, throughput: 10803.214135370057 tokens/s
+Batch size: 33, time: 6233.91796875 ms, throughput: 10841.336112985726 tokens/s
+Batch size: 34, time: 6468.5595703125 ms, throughput: 10764.684044895645 tokens/s
+Batch size: 35, time: 6839.59619140625 ms, throughput: 10480.150873536042 tokens/s
+Batch size: 36, time: 6978.58642578125 ms, throughput: 10564.89029463387 tokens/s
+Batch size: 37, time: 7396.3095703125 ms, throughput: 10245.109304801368 tokens/s
+Batch size: 38, time: 7888.759765625 ms, throughput: 9865.175555112657 tokens/s
+Batch size: 39, time: 8066.1298828125 ms, throughput: 9902.146526327717 tokens/s
+Batch size: 40, time: 8222.349609375 ms, throughput: 9963.08888478739 tokens/s
+Batch size: 41, time: 8559.80078125 ms, throughput: 9809.574094753409 tokens/s
+
+
+# NVIDIA A100 80GB
+Batch size: 1, time: 549.4537963867188 ms, throughput: 3727.337973580163 tokens/s
+Batch size: 2, time: 310.8029479980469 ms, throughput: 13178.768175730882 tokens/s
+Batch size: 3, time: 466.9982604980469 ms, throughput: 13156.365921893399 tokens/s
+Batch size: 4, time: 620.6627807617188 ms, throughput: 13198.793699126329 tokens/s
+Batch size: 5, time: 774.2208251953125 ms, throughput: 13226.20067397019 tokens/s
+Batch size: 6, time: 927.94775390625 ms, throughput: 13242.124837603142 tokens/s
+Batch size: 7, time: 1084.93359375 ms, throughput: 13213.711956736985 tokens/s
+Batch size: 8, time: 1245.021240234375 ms, throughput: 13159.614848752071 tokens/s
+Batch size: 9, time: 1399.0528564453125 ms, throughput: 13174.627330972815 tokens/s
+Batch size: 10, time: 1560.100341796875 ms, throughput: 13127.36075450876 tokens/s
+Batch size: 11, time: 1719.669189453125 ms, throughput: 13100.194001361488 tokens/s
+Batch size: 12, time: 1878.5428466796875 ms, throughput: 13082.48041477357 tokens/s
+Batch size: 13, time: 2037.1051025390625 ms, throughput: 13069.526931534192 tokens/s
+Batch size: 14, time: 2198.3564453125 ms, throughput: 13042.470915549924 tokens/s
+Batch size: 15, time: 2363.34228515625 ms, throughput: 12998.540326954366 tokens/s
+Batch size: 16, time: 2522.610107421875 ms, throughput: 12989.720410455788 tokens/s
+Batch size: 17, time: 2815.765625 ms, throughput: 12364.665471757791 tokens/s
+Batch size: 18, time: 2856.405029296875 ms, throughput: 12905.732773154494 tokens/s
+Batch size: 19, time: 3008.721923828125 ms, throughput: 12933.066260404219 tokens/s
+Batch size: 20, time: 3172.687255859375 ms, throughput: 12910.191486524349 tokens/s
+Batch size: 21, time: 3325.825927734375 ms, throughput: 12931.524660191095 tokens/s
+Batch size: 22, time: 3488.267333984375 ms, throughput: 12916.441226004332 tokens/s
+Batch size: 23, time: 3795.76220703125 ms, throughput: 12409.628799387065 tokens/s
+Batch size: 24, time: 3826.98095703125 ms, throughput: 12843.544441916762 tokens/s
+Batch size: 25, time: 3978.948486328125 ms, throughput: 12867.721252468053 tokens/s
+Batch size: 26, time: 4136.0224609375 ms, throughput: 12874.20474692742 tokens/s
+Batch size: 27, time: 4298.45556640625 ms, throughput: 12864.155310143304 tokens/s
+Batch size: 28, time: 4813.06005859375 ms, throughput: 11914.249833141374 tokens/s
+Batch size: 29, time: 4616.1513671875 ms, throughput: 12866.129222314905 tokens/s
+
+
+# NVIDIA RTX 4090
+Batch size: 1, time: 338.2198486328125 ms, throughput: 6055.233033420832 tokens/s
+Batch size: 2, time: 390.37666015625 ms, throughput: 10492.430562730256 tokens/s
+Batch size: 3, time: 575.90947265625 ms, throughput: 10668.343362477113 tokens/s
+Batch size: 4, time: 747.86181640625 ms, throughput: 10953.895252154416 tokens/s
+Batch size: 5, time: 943.86728515625 ms, throughput: 10848.98286129797 tokens/s
+Batch size: 6, time: 1127.87841796875 ms, throughput: 10894.791321683453 tokens/s
+Batch size: 7, time: 1319.95400390625 ms, throughput: 10860.984517319755 tokens/s
+Batch size: 8, time: 1515.64404296875 ms, throughput: 10809.926035078812 tokens/s
+Batch size: 9, time: 1693.90859375 ms, throughput: 10881.342752500574 tokens/s
+Batch size: 10, time: 1880.376953125 ms, throughput: 10891.433212880147 tokens/s
+Batch size: 11, time: 2103.458203125 ms, throughput: 10709.982240926538 tokens/s
+Batch size: 12, time: 2250.3044921875 ms, throughput: 10921.188703716225 tokens/s
+Batch size: 13, time: 2479.0240234375 ms, throughput: 10739.710365163079 tokens/s
+Batch size: 14, time: 2630.044921875 ms, throughput: 10901.71493327927 tokens/s
+Batch size: 15, time: 2870.7599609375 ms, throughput: 10700.999184190869 tokens/s
+Batch size: 16, time: 3031.2466796875 ms, throughput: 10810.073696601343 tokens/s
+Batch size: 17, time: 3227.7248046875 ms, throughput: 10786.545355241584 tokens/s
+Batch size: 18, time: 3414.641796875 ms, throughput: 10795.861526013377 tokens/s
+Batch size: 19, time: 3599.49609375 ms, throughput: 10810.402063656913 tokens/s
+Batch size: 20, time: 3790.325 ms, throughput: 10806.461187365201 tokens/s
+Batch size: 21, time: 3977.119921875 ms, throughput: 10813.855464464854 tokens/s
+Batch size: 22, time: 4172.423828125 ms, throughput: 10798.519483157881 tokens/s
+Batch size: 23, time: 4365.4953125 ms, throughput: 10790.069998500312 tokens/s
+Batch size: 24, time: 4547.9953125 ms, throughput: 10807.399001689273 tokens/s
+
+
+# NVIDIA RTX 3080
+Batch size: 1, time: 788.255126953125 ms, throughput: 2598.143583177465 tokens/s
+Batch size: 2, time: 810.511767578125 ms, throughput: 5053.597200987199 tokens/s
+Batch size: 3, time: 1204.09638671875 ms, throughput: 5102.581543943376 tokens/s
+Batch size: 4, time: 1475.91845703125 ms, throughput: 5550.442140602994 tokens/s
+
