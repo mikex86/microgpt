@@ -42,51 +42,55 @@ s3_prefix = 'the-stack-replit'
 
 
 def process_parquet_url(parquet_url: str):
-    lang_name = parquet_url.split("/")[-2]
-    index = int(parquet_url.split("-")[-3])
+    try:
+        lang_name = parquet_url.split("/")[-2]
+        index = int(parquet_url.split("-")[-3])
 
-    train_file_path = f"train-{lang_name}-{index}.bin"
-    val_file_path = f"val-{lang_name}-{index}.bin"
+        train_file_path = f"train-{lang_name}-{index}.bin"
+        val_file_path = f"val-{lang_name}-{index}.bin"
 
-    train_s3_key = f"{s3_bucket}/{s3_prefix}/{train_file_path}"
-    val_s3_key = f"{s3_bucket}/{s3_prefix}/{val_file_path}"
+        train_s3_key = f"{s3_bucket}/{s3_prefix}/{train_file_path}"
+        val_s3_key = f"{s3_bucket}/{s3_prefix}/{val_file_path}"
 
-    if s3.exists(train_s3_key) and s3.exists(val_s3_key):
-        print(f"Skipping {train_file_path} because it already exists")
-        return
+        if s3.exists(train_s3_key) and s3.exists(val_s3_key):
+            print(f"Skipping {train_file_path} because it already exists")
+            return
 
-    tokenizer = SentencePieceTokenizer("replit_tokenizer.model")
-    streamer = ParquetStreamer(
-        parquet_url,
-        headers={'Authorization': 'Bearer ' + os.environ['HUGGINGFACE_TOKEN']},
-        observed_rows=['content']
-    )
+        tokenizer = SentencePieceTokenizer("replit_tokenizer.model")
+        streamer = ParquetStreamer(
+            parquet_url,
+            headers={'Authorization': 'Bearer ' + os.environ['HUGGINGFACE_TOKEN']},
+            observed_rows=['content']
+        )
 
-    train_token_buffer = []
-    val_token_buffer = []
+        train_token_buffer = []
+        val_token_buffer = []
 
-    s3.touch(train_s3_key, create_parents=True)
-    s3.touch(val_s3_key, create_parents=True)
-    with s3.open(train_s3_key, "wb") as train_file:
-        with s3.open(val_s3_key, "wb") as val_file:
-            for row in streamer:
-                goes_to_val = np.random.random() < 0.01
-                content = row['content']
-                tokens = tokenizer.encode(content, eos=True)
+        s3.touch(train_s3_key, create_parents=True)
+        s3.touch(val_s3_key, create_parents=True)
+        with s3.open(train_s3_key, "wb") as train_file:
+            with s3.open(val_s3_key, "wb") as val_file:
+                for row in streamer:
+                    goes_to_val = np.random.random() < 0.01
+                    content = row['content']
+                    tokens = tokenizer.encode(content, eos=True)
 
-                if goes_to_val:
-                    val_token_buffer.extend(tokens)
-                    if len(val_token_buffer) >= TOKEN_BUFFER_SIZE:
-                        _flush_token_buffer(val_token_buffer, val_file)
-                else:
-                    train_token_buffer.extend(tokens)
-                    if len(train_token_buffer) >= TOKEN_BUFFER_SIZE:
-                        _flush_token_buffer(train_token_buffer, train_file)
+                    if goes_to_val:
+                        val_token_buffer.extend(tokens)
+                        if len(val_token_buffer) >= TOKEN_BUFFER_SIZE:
+                            _flush_token_buffer(val_token_buffer, val_file)
+                    else:
+                        train_token_buffer.extend(tokens)
+                        if len(train_token_buffer) >= TOKEN_BUFFER_SIZE:
+                            _flush_token_buffer(train_token_buffer, train_file)
 
-            _flush_token_buffer(train_token_buffer, train_file)
-            _flush_token_buffer(val_token_buffer, val_file)
+                _flush_token_buffer(train_token_buffer, train_file)
+                _flush_token_buffer(val_token_buffer, val_file)
 
-    return train_file_path, val_file_path
+        return train_file_path, val_file_path
+    except Exception as e:
+        print(f"Error processing {parquet_url}: {e}")
+
 
 
 BUFFER_SIZE = 65536 * 16
@@ -101,11 +105,11 @@ def main():
     print(f"Downloading {len(parquet_urls)} parquet files")
 
     # multiprocessing
-    num_workers = multiprocessing.cpu_count() * 4
+    num_workers = multiprocessing.cpu_count() * 2
     results = []
     with multiprocessing.get_context('spawn').Pool(num_workers) as pool:
         result = list(tqdm(pool.imap(process_parquet_url, parquet_urls), total=len(parquet_urls),
-                      desc="Downloading bigcode/the-stack", unit="parquet files"))
+                           desc="Downloading bigcode/the-stack", unit="parquet files"))
         results.append(result)
 
 
