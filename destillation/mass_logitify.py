@@ -80,106 +80,54 @@ files = []
 
 BUFFER_SIZE = 65536
 
-file_cache: Dict[str, s3fs.S3File] = {}
+N_SEQUENTIAL_BLOCKS = 10
+SEQUENTIAL_SKIP = 1000
 
 
-def read_next_block_part(dataset_s3_folder: str, block_size: int, is_train: bool,
-                         tokenizer: Tokenizer,
-                         dtype: np.dtype) -> np.ndarray:
-    global s3, files
-    if s3 is None:
-        s3 = s3fs.S3FileSystem(key=os.environ['AWS_ACCESS_KEY_ID'], secret=os.environ['AWS_SECRET_ACCESS_KEY'])
-        files = s3.ls(dataset_s3_folder)
+class BlockStreamingProcess(multiprocessing.Process):
 
-    train_files = [f for f in files if 'train' in f]
-    test_files = [f for f in files if 'val' in f]
+    def __init__(self, file: str, token_dtype: np.dtype, block_size: int, queue: multiprocessing.Queue):
+        super().__init__()
+        self.file = s3.open(file, 'rb')
+        self.token_dtype = token_dtype
+        self.block_size = block_size
+        self.queue = queue
 
-    while True:
-        if is_train:
-            file = np.random.choice(train_files)
-        else:
-            file = np.random.choice(test_files)
+    def read_next_block(self) -> np.ndarray:
+        dtype_bytes = np.dtype(self.token_dtype).itemsize
+        block = self.file.read(self.block_size * dtype_bytes)
+        block = np.frombuffer(block, dtype=self.token_dtype).astype(np.int32)
+        return block
 
-        file_size = s3.info(file)['Size']
-        if file_size >= block_size:
-            break
-
-    dtype_bytes = np.dtype(dtype).itemsize
-
-    f = file_cache.get(file, None)
-
-    if f is None:
-        f = s3.open(file, 'rb')
-        file_cache[file] = f
-
-    rand_idx = np.random.randint(0, file_size - block_size)
-
-    # check dtype alignment
-    if rand_idx % dtype_bytes != 0:
-        rand_idx -= 1
-
-    f.seek(rand_idx)
-
-    if isinstance(tokenizer, TerminatedTokenizer):
-        # read until next eot token
-        block = f.read(block_size * dtype_bytes)
-        block = np.frombuffer(block, dtype=dtype)
-
-        # crop after first eot token
-        eot_idx = np.where(block == tokenizer.eot_token)[0]
-        if len(eot_idx) > 0:
-            block = block[:eot_idx[0]]
-
-    else:
-        block = f.read(block_size * dtype_bytes)
-        block = np.frombuffer(block, dtype=dtype)
-
-    return block
+    def run(self) -> None:
+        while True:
+            _ = self.queue.get()  # wait for a signal to start reading
+            block = self.read_next_block()
+            self.queue.put(block)
 
 
-def build_full_block(dataset_s3_folder: str, block_size: int, is_train: bool, tokenizer: Tokenizer,
-                     token_dtype: np.dtype):
-    block = read_next_block_part(dataset_s3_folder, block_size, is_train, tokenizer, token_dtype)
-    while len(block) < block_size:
-        block = np.concatenate(
-            (block, read_next_block_part(dataset_s3_folder, block_size, is_train,
-                                         tokenizer, token_dtype))
-        )
-    block = block[:block_size]
-    return block.astype(np.int32)
-
-
-def block_iterator(dataset_s3_folder: str, block_size: int, is_train: bool, tokenizer: Tokenizer,
-                   token_dtype: np.dtype):
-    while True:
-        yield build_full_block(dataset_s3_folder, block_size, is_train, tokenizer, token_dtype)
-
-
-def parallel_block_iterator(dataset_s3_folder: str, block_size: int, is_train: bool, tokenizer: Tokenizer,
+def parallel_block_iterator(dataset_s3_folder: str, block_size: int, is_train: bool,
                             token_dtype: np.dtype, num_workers: int, blocks_in_flight: int) -> iter:
-    pool = multiprocessing.get_context('spawn').Pool(num_workers)
-
     results = []
     first_result_yielded = False
 
+    # Create block streaming processes for all files
+    
+
     while True:
-        while len(results) < blocks_in_flight:
-            # run build_full_block in parallel
-            results.append(
-                pool.apply_async(build_full_block, (dataset_s3_folder, block_size, is_train, tokenizer, token_dtype))
-            )
 
         # yield the first result
-        for block in results:
-            if block.ready():
-                yield block.get()
-                results.remove(block)
+        for result in results:
+            if result.ready():
+                block = result.get()
+                yield block
+                results.remove(result)
                 first_result_yielded = True
                 break
         # else:
-            # if first_result_yielded:
-                # we are starved for data
-                #print("Starved for data...")
+        # if first_result_yielded:
+        # we are starved for data
+        # print("Starved for data...")
 
 
 @torch.inference_mode()
@@ -201,7 +149,7 @@ def logitify_targets(model: ILanguageModel, tokenizer: Tokenizer,
     num_blocks = token_budget // block_size
 
     # train_it = block_iterator(dataset_s3_folder, block_size, True, tokenizer, token_dtype)
-    train_it = parallel_block_iterator(dataset_s3_folder, block_size, True, tokenizer, token_dtype,
+    train_it = parallel_block_iterator(dataset_s3_folder, block_size, True, token_dtype,
                                        num_workers,
                                        blocks_in_flight)
 

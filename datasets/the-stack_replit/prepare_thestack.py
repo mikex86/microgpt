@@ -69,10 +69,12 @@ class DestroyProgressBarMessage(Message):
     task_id: str
 
 
-@dataclass
 class ErrorMessage(Message):
-    task_id: str
-    error: Exception
+
+    def __init__(self, task_id: str, exception: BaseException):
+        self.task_id = task_id
+        self.exception = exception
+        self.traceback = traceback.extract_tb(exception.__traceback__)
 
 
 def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue):
@@ -146,10 +148,14 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
         progress_queue.put(DestroyProgressBarMessage(task_id))
 
 
-error_file = open("errors.txt", "w")
+error_file = None
 
 
 def print_err(string: str):
+    global error_file
+    if error_file is None:
+        error_file = open("errors.txt", "a+")
+
     error_file.write(string + "\n")
     error_file.flush()
 
@@ -165,7 +171,7 @@ def main():
     print(f"Downloading {len(parquet_urls)} parquet files")
 
     # multiprocessing
-    num_workers = multiprocessing.cpu_count() * 4
+    num_workers = 1
 
     tasks = {}
 
@@ -227,19 +233,17 @@ def main():
                                 f"Error: Received progress message for unknown task {new_message.task_id}")
 
                     elif isinstance(new_message, ErrorMessage):
-                        task = tasks[new_message.task_id]
+                        task = tasks.get(new_message.task_id, None)
                         if task is not None:
                             jobs_progress.remove_task(task)
                             del tasks[new_message.task_id]
-                            print_err(f"Error from task ${new_message.task_id}: {new_message.error}")
+                            print_err(f"Error from task ${new_message.task_id}: {new_message.exception}")
                         else:
                             print_err(
-                                f"Error: from unknown task {new_message.task_id}: {new_message.error}")
+                                f"Error: from unknown task {new_message.task_id}: {new_message.exception}")
 
                         # print stacktrace
-                        tb_list = traceback.extract_tb(new_message.error.__traceback__)
-                        for item in traceback.StackSummary.from_list(tb_list).format():
-                            print_err(item)
+                        print_err('\n'.join(new_message.traceback.format()) + '\n')
 
                 time.sleep(0.1)
 
@@ -250,4 +254,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except BaseException as e:
+        print_err(f"Exception in main() method: {e}")
+        print_err(traceback.format_exc())
