@@ -176,12 +176,12 @@ def main():
 
     progress_table = Table.grid()
     progress_table.add_row(
+        Panel.fit(jobs_progress, title="[b]Jobs", border_style="red", padding=(1, 1))
+    )
+    progress_table.add_row(
         Panel.fit(
             overall_progress, title="Overall Progress", border_style="green", padding=(1, 1)
         )
-    )
-    progress_table.add_row(
-        Panel.fit(jobs_progress, title="[b]Jobs", border_style="red", padding=(1, 1))
     )
 
     with ProcessPoolExecutor(num_workers) as executor:
@@ -202,7 +202,7 @@ def main():
                         if task is not None:
                             jobs_progress.update(task, completed=new_message.n_current_progress)
                         else:
-                            print(f"Error: Received progress message for unknown task {new_message.task_id}")
+                            overall_progress.print(f"Error: Received progress message for unknown task {new_message.task_id}")
 
                     elif isinstance(new_message, DestroyProgressBarMessage):
                         task = tasks[new_message.task_id]
@@ -211,19 +211,21 @@ def main():
                             jobs_progress.remove_task(task)
                             del tasks[new_message.task_id]
                         else:
-                            print(f"Error: Received progress message for unknown task {new_message.task_id}")
+                            overall_progress.print(f"Error: Received progress message for unknown task {new_message.task_id}")
 
                     elif isinstance(new_message, ErrorMessage):
                         task = tasks[new_message.task_id]
                         if task is not None:
                             jobs_progress.remove_task(task)
                             del tasks[new_message.task_id]
-                            print(f"Error from task ${new_message.task_id}: {new_message.error}")
-                            traceback.print_tb(new_message.error.__traceback__)
-
+                            overall_progress.print(f"Error from task ${new_message.task_id}: {new_message.error}")
                         else:
-                            print(f"Error: from unknown task {new_message.task_id}: {new_message.error}")
-                            traceback.print_tb(new_message.error.__traceback__)
+                            overall_progress.print(f"Error: from unknown task {new_message.task_id}: {new_message.error}")
+
+                        # print stacktrace
+                        tb_list = traceback.extract_tb(new_message.error.__traceback__)
+                        for item in traceback.StackSummary.from_list(tb_list).format():
+                            overall_progress.print(item)
 
                 time.sleep(0.1)
 
