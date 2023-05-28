@@ -162,7 +162,7 @@ def print_err(string: str):
 def main():
     multiprocessing.set_start_method("spawn", force=True)
 
-    parquet_urls = list_parquet_files("bigcode/the-stack-dedup", patterns=["**/data-0000*-of-*.parquet"])
+    parquet_urls = list_parquet_files("bigcode/the-stack-dedup", patterns=["**/data-00001-of-*.parquet"])
 
     # remove languages that are not important
     parquet_urls = list(filter(lambda x: language_importance.get(x.split("/")[-2], 0) > 0, parquet_urls))
