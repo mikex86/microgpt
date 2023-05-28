@@ -121,19 +121,17 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
                     tokens = tokenizer.encode(content, eos=True)
 
                     row_idx += 1
+                    # update progress bar
+                    progress_queue.put(SetProgressMessage(task_id, row_idx))
 
                     if goes_to_val:
                         val_token_buffer.extend(tokens)
                         if len(val_token_buffer) >= TOKEN_BUFFER_SIZE:
                             _flush_token_buffer(val_token_buffer, val_file)
-                            # update progress bar
-                            progress_queue.put(SetProgressMessage(task_id, row_idx))
                     else:
                         train_token_buffer.extend(tokens)
                         if len(train_token_buffer) >= TOKEN_BUFFER_SIZE:
                             _flush_token_buffer(train_token_buffer, train_file)
-                            # update progress bar
-                            progress_queue.put(SetProgressMessage(task_id, row_idx))
 
                 _flush_token_buffer(train_token_buffer, train_file)
                 _flush_token_buffer(val_token_buffer, val_file)
