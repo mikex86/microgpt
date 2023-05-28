@@ -1,7 +1,8 @@
 import multiprocessing
 import threading
+import time
 from dataclasses import dataclass
-from queue import Queue
+from queue import Queue, Empty
 from typing import Tuple, Dict
 
 
@@ -36,7 +37,11 @@ class ProcessPoolExecutor:
                     del self.function_arg_bundle_result_map[function_arg_bundle]
 
             if n_running_processes < self.num_parallel_processes:
-                task = self.task_queue.get()
+                try:
+                    task = self.task_queue.get(timeout=1)
+                except Empty:
+                    time.sleep(0.1)
+                    continue
                 func, args = task
                 process = multiprocessing.Process(target=func, args=args)
                 process.start()

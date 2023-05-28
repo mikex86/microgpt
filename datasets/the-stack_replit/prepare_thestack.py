@@ -92,6 +92,7 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
 
         if s3.exists(train_s3_key) and s3.exists(val_s3_key):
             print(f"Skipping {train_file_path} and {val_s3_key} because it already exist")
+            progress_queue.put(DestroyProgressBarMessage(task_id))
             return
 
         print(f"Processing {train_s3_key}/{val_s3_key}...")
@@ -170,7 +171,7 @@ def main():
     print(f"Downloading {len(parquet_urls)} parquet files")
 
     # multiprocessing
-    num_workers = 4
+    num_workers = multiprocessing.cpu_count()
 
     tasks = {}
 
@@ -223,9 +224,9 @@ def main():
                                 f"Error: Received progress message for unknown task {new_message.task_id}")
 
                     elif isinstance(new_message, DestroyProgressBarMessage):
+                        overall_progress.advance(overall_task, 1)
                         task = tasks.get(new_message.task_id, None)
                         if task is not None:
-                            overall_progress.advance(overall_task, 1)
                             jobs_progress.remove_task(task)
                             del tasks[new_message.task_id]
                         else:
