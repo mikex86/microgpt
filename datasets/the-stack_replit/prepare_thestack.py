@@ -176,9 +176,9 @@ def main():
 
     results = []
 
-    # progress message socket.
     # Used by subprocesses to communicate progress to the main process.
-    progress_queue = multiprocessing.Queue()
+    # Every process has its own queue.
+    progress_queues = []
 
     overall_progress = Progress()
     overall_task = overall_progress.add_task("All Jobs", total=len(parquet_urls))
@@ -203,54 +203,56 @@ def main():
 
     with ProcessPoolExecutor(num_workers) as executor:
         for parquet_url in parquet_urls:
+            progress_queue = multiprocessing.Queue()
+            progress_queues.append(progress_queue)
             results.append(executor.submit(process_parquet_url, (parquet_url, progress_queue)))
 
         with Live(progress_table, refresh_per_second=10):
             while True:
-                new_message = progress_queue.get() if not progress_queue.empty() else None
-
-                if new_message is not None:
-                    if isinstance(new_message, CreateProgressBarMessage):
-                        task = jobs_progress.add_task(new_message.task_id, total=new_message.n_total)
-                        tasks[new_message.task_id] = task
-
-                    elif isinstance(new_message, SetProgressMessage):
-                        task = tasks.get(new_message.task_id, None)
-                        if task is not None:
-                            jobs_progress.update(task, completed=new_message.n_current_progress)
-                        else:
-                            print_err(
-                                f"Error: Received progress message for unknown task {new_message.task_id}")
-
-                    elif isinstance(new_message, DestroyProgressBarMessage):
-                        overall_progress.advance(overall_task, 1)
-                        task = tasks.get(new_message.task_id, None)
-                        if task is not None:
-                            jobs_progress.remove_task(task)
-                            del tasks[new_message.task_id]
-                        else:
-                            print_err(
-                                f"Error: Received destroy message for unknown task {new_message.task_id}")
-
-                    elif isinstance(new_message, ErrorMessage):
-                        task = tasks.get(new_message.task_id, None)
-                        if task is not None:
-                            jobs_progress.remove_task(task)
-                            del tasks[new_message.task_id]
-                            print_err(f"Error from task ${new_message.task_id}: {new_message.exception}")
-                        else:
-                            print_err(
-                                f"Error: from unknown task {new_message.task_id}: {new_message.exception}")
-
-                        # print stacktrace
-                        print_err('\n'.join(new_message.traceback.format()) + '\n')
-
                 time.sleep(0.1)
+                for progress_queue in progress_queues:
+                    new_message = progress_queue.get() if not progress_queue.empty() else None
 
-                # break if all tasks are done
-                all_done = all(result.is_finished for result in results)
-                if all_done:
-                    break
+                    if new_message is not None:
+                        if isinstance(new_message, CreateProgressBarMessage):
+                            task = jobs_progress.add_task(new_message.task_id, total=new_message.n_total)
+                            tasks[new_message.task_id] = task
+
+                        elif isinstance(new_message, SetProgressMessage):
+                            task = tasks.get(new_message.task_id, None)
+                            if task is not None:
+                                jobs_progress.update(task, completed=new_message.n_current_progress)
+                            else:
+                                print_err(
+                                    f"Error: Received progress message for unknown task {new_message.task_id}")
+
+                        elif isinstance(new_message, DestroyProgressBarMessage):
+                            overall_progress.advance(overall_task, 1)
+                            task = tasks.get(new_message.task_id, None)
+                            if task is not None:
+                                jobs_progress.remove_task(task)
+                                del tasks[new_message.task_id]
+                            else:
+                                print_err(
+                                    f"Error: Received destroy message for unknown task {new_message.task_id}")
+
+                        elif isinstance(new_message, ErrorMessage):
+                            task = tasks.get(new_message.task_id, None)
+                            if task is not None:
+                                jobs_progress.remove_task(task)
+                                del tasks[new_message.task_id]
+                                print_err(f"Error from task ${new_message.task_id}: {new_message.exception}")
+                            else:
+                                print_err(
+                                    f"Error: from unknown task {new_message.task_id}: {new_message.exception}")
+
+                            # print stacktrace
+                            print_err('\n'.join(new_message.traceback.format()) + '\n')
+
+                    # break if all tasks are done
+                    all_done = all(result.is_finished for result in results)
+                    if all_done:
+                        break
 
 
 if __name__ == '__main__':
