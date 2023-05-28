@@ -15,7 +15,8 @@ from huggingface_hub import HfApi
 from robustdatasets.parquet_streamer import ParquetStreamer
 from tokenization.sentencepiece_tokenizer import SentencePieceTokenizer
 
-from rich.progress import Table, Progress, BarColumn, TextColumn, TimeRemainingColumn
+from rich.progress import Table, Progress, BarColumn, TextColumn, TimeRemainingColumn, MofNCompleteColumn, \
+    TaskProgressColumn
 from rich.panel import Panel
 from rich.live import Live
 
@@ -78,10 +79,11 @@ class ErrorMessage(Message):
 
 
 def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue):
-    try:
-        lang_name = parquet_url.split("/")[-2]
-        index = int(parquet_url.split("-")[-3])
+    lang_name = parquet_url.split("/")[-2]
+    index = int(parquet_url.split("-")[-3])
 
+    task_id = f"{lang_name}-{index}"
+    try:
         train_file_path = f"train-{lang_name}-{index}.bin"
         val_file_path = f"val-{lang_name}-{index}.bin"
 
@@ -89,7 +91,7 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
         val_s3_key = f"{s3_bucket}/{s3_prefix}/{val_file_path}"
 
         if s3.exists(train_s3_key) and s3.exists(val_s3_key):
-            print(f"Skipping {train_file_path}/{val_s3_key} because it already exists")
+            print(f"Skipping {train_file_path} and {val_s3_key} because it already exist")
             return
 
         print(f"Processing {train_s3_key}/{val_s3_key}...")
@@ -100,6 +102,7 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
             headers={'Authorization': 'Bearer ' + os.environ['HUGGINGFACE_TOKEN']},
             observed_rows=['content']
         )
+        n_rows = len(streamer)
 
         train_token_buffer = []
         val_token_buffer = []
@@ -109,10 +112,6 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
 
         with s3.open(train_s3_key, "wb") as train_file:
             with s3.open(val_s3_key, "wb") as val_file:
-                n_rows = len(streamer)
-
-                task_id = f"{lang_name}-{index}"
-
                 # start new progress bar
                 progress_queue.put(CreateProgressBarMessage(task_id, n_rows))
 
@@ -171,7 +170,7 @@ def main():
     print(f"Downloading {len(parquet_urls)} parquet files")
 
     # multiprocessing
-    num_workers = multiprocessing.cpu_count() * 2
+    num_workers = multiprocessing.cpu_count() * 4
 
     tasks = {}
 
@@ -185,10 +184,12 @@ def main():
     overall_task = overall_progress.add_task("All Jobs", total=len(parquet_urls))
 
     jobs_progress = Progress(
-        "{task.description}",
-        BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TimeRemainingColumn(),
+        # "{task.description}",
+        # BarColumn(),
+        # TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        # TimeRemainingColumn(),
+        # MofNCompleteColumn(),
+        TaskProgressColumn(show_speed=True)
     )
 
     progress_table = Table.grid()
