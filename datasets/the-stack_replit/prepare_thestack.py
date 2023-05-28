@@ -5,6 +5,7 @@ import sys
 import time
 import traceback
 from dataclasses import dataclass
+from queue import Empty
 from typing import List
 
 import numpy as np
@@ -207,9 +208,12 @@ def main():
 
         with Live(progress_table, refresh_per_second=10):
             while True:
-                time.sleep(0.1)
+                time.sleep(0.25)
                 for progress_queue in progress_queues:
-                    new_message = progress_queue.get() if not progress_queue.empty() else None
+                    try:
+                        new_message = progress_queue.get(block=False)
+                    except Empty:
+                        new_message = None
 
                     if new_message is not None:
                         if isinstance(new_message, CreateProgressBarMessage):
