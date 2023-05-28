@@ -170,7 +170,7 @@ def main():
     print(f"Downloading {len(parquet_urls)} parquet files")
 
     # multiprocessing
-    num_workers = multiprocessing.cpu_count() * 8
+    num_workers = multiprocessing.cpu_count() * 4
 
     tasks = {}
 
@@ -215,7 +215,7 @@ def main():
                         tasks[new_message.task_id] = task
 
                     elif isinstance(new_message, SetProgressMessage):
-                        task = tasks[new_message.task_id]
+                        task = tasks.get(new_message.task_id, None)
                         if task is not None:
                             jobs_progress.update(task, completed=new_message.n_current_progress)
                         else:
@@ -223,7 +223,7 @@ def main():
                                 f"Error: Received progress message for unknown task {new_message.task_id}")
 
                     elif isinstance(new_message, DestroyProgressBarMessage):
-                        task = tasks[new_message.task_id]
+                        task = tasks.get(new_message.task_id, None)
                         if task is not None:
                             overall_progress.advance(overall_task, 1)
                             jobs_progress.remove_task(task)
