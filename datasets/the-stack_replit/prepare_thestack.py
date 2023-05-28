@@ -184,12 +184,11 @@ def main():
     overall_task = overall_progress.add_task("All Jobs", total=len(parquet_urls))
 
     jobs_progress = Progress(
-        # "{task.description}",
-        # BarColumn(),
-        # TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        # TimeRemainingColumn(),
-        # MofNCompleteColumn(),
-        TaskProgressColumn(show_speed=True)
+        "{task.description}",
+        BarColumn(),
+        TaskProgressColumn(show_speed=True),
+        TimeRemainingColumn(),
+        MofNCompleteColumn(),
     )
 
     progress_table = Table.grid()
