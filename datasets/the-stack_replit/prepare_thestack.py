@@ -91,11 +91,8 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
         val_s3_key = f"{s3_bucket}/{s3_prefix}/{val_file_path}"
 
         if s3.exists(train_s3_key) and s3.exists(val_s3_key):
-            print(f"Skipping {train_file_path} and {val_s3_key} because it already exist")
             progress_queue.put(DestroyProgressBarMessage(task_id))
             return
-
-        print(f"Processing {train_s3_key}/{val_s3_key}...")
 
         tokenizer = SentencePieceTokenizer("replit_tokenizer.model")
         streamer = ParquetStreamer(
@@ -231,7 +228,7 @@ def main():
                             del tasks[new_message.task_id]
                         else:
                             print_err(
-                                f"Error: Received progress message for unknown task {new_message.task_id}")
+                                f"Error: Received destroy message for unknown task {new_message.task_id}")
 
                     elif isinstance(new_message, ErrorMessage):
                         task = tasks.get(new_message.task_id, None)
