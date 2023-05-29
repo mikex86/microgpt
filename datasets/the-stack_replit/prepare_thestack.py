@@ -161,7 +161,7 @@ def print_err(string: str):
 def main():
     multiprocessing.set_start_method("spawn", force=True)
 
-    parquet_urls = list_parquet_files("bigcode/the-stack-dedup", patterns=["**/data-0000*-of-*.parquet"])
+    parquet_urls = list_parquet_files("bigcode/the-stack-dedup", patterns=["**/data-000**-of-*.parquet"])
 
     # remove languages that are not important
     parquet_urls = list(filter(lambda x: language_importance.get(x.split("/")[-2], 0) > 0, parquet_urls))
@@ -169,7 +169,7 @@ def main():
     print(f"Downloading {len(parquet_urls)} parquet files")
 
     # multiprocessing
-    num_workers = multiprocessing.cpu_count()
+    num_workers = multiprocessing.cpu_count() * 4
 
     tasks = {}
 
@@ -179,7 +179,12 @@ def main():
     # Every process has its own queue.
     progress_queues = []
 
-    overall_progress = Progress()
+    overall_progress = Progress(
+        BarColumn(),
+        TaskProgressColumn(show_speed=True),
+        TimeRemainingColumn(),
+        MofNCompleteColumn(),
+    )
     overall_task = overall_progress.add_task("All Jobs", total=len(parquet_urls))
 
     jobs_progress = Progress(
