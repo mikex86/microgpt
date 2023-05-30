@@ -42,7 +42,7 @@ def main():
     checkpointing.load_checkpoint(src_model, None, 'checkpoints/replit-3b', 'best', load_lazy=True)
 
     dst_config = ReplitLMConfig(
-        d_model=1284,
+        d_model=2568,
         n_heads=12,
         n_layers=12,
         mlp_ratio=4,
