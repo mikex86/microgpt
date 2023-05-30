@@ -155,7 +155,7 @@ class LanguageModelTrainer:
                         batch_size=self.training_config.batch_size,
                         device=self.training_config.device
                     ),
-                    num_prefetch=64
+                    num_prefetch=128
             ) as train_it:
                 while self.current_step < self.training_config.max_steps:
                     x, y = next(train_it)
