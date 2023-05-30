@@ -32,19 +32,16 @@ class BlockStreamingProcess(multiprocessing.Process):
         self.buffer_read_pos = 0
         self.buffer_write_pos = 0
 
-    def __buffered_read(self, file, n_bytes) -> Optional[bytearray]:
+    def __buffered_read(self, file, n_bytes) -> bytes:
         bytes_read = 0
         while bytes_read < n_bytes:
             if self.buffer_read_pos == self.buffer_write_pos:
                 # buffer is empty, read more data
                 self.buffer_read_pos = 0
-                prev_buffer_write_pos = self.buffer_write_pos
                 self.buffer_write_pos = file.readinto(self.buffer)
-                if prev_buffer_write_pos == 0 and self.buffer_write_pos == 0:
-                    return None
-                if self.buffer_write_pos == 0:
+                if self.buffer_write_pos < len(self.buffer):
+                    # we've reached the end of the file
                     file.seek(0)
-                    continue
             bytes_to_read = min(n_bytes - bytes_read, self.buffer_write_pos - self.buffer_read_pos)
             self.buffer_read_pos += bytes_to_read
             bytes_read += bytes_to_read
