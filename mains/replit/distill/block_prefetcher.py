@@ -50,9 +50,10 @@ class BlockStreamingProcess(multiprocessing.Process):
     def _read_next_block(self, file_name: str) -> Optional[np.ndarray]:
         dtype_bytes = np.dtype(self.token_dtype).itemsize
         file = self.files[file_name]
-        block = self.__buffered_read(file, self.block_size * dtype_bytes)
-        if block is None:
-            return None
+        block = None
+        while block is None or len(block) < self.block_size * dtype_bytes:
+            block = self.__buffered_read(file, self.block_size * dtype_bytes)
+
         block = np.frombuffer(block, dtype=self.token_dtype).astype(np.int64)
         return block
 

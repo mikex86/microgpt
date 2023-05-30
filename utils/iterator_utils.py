@@ -80,7 +80,8 @@ def prefetching_iterator(dataset_iterator: iter, num_prefetch: int):
                 except Exception as e:
                     # print exception
                     print(e)
-                    traceback.print_exc()
+                    tb = traceback.format_exc()
+                    print(tb)
                     # ignore
                     continue
                 if self.done:
