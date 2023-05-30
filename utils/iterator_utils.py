@@ -1,3 +1,4 @@
+import traceback
 from typing import Iterator, Tuple
 
 import torch
@@ -73,7 +74,15 @@ def prefetching_iterator(dataset_iterator: iter, num_prefetch: int):
                 raise StopIteration
 
         def prefetch(self):
-            for example in self.dataset_iterator:
+            while True:
+                try:
+                    example = next(self.dataset_iterator)
+                except Exception as e:
+                    # print exception
+                    print(e)
+                    traceback.print_exc()
+                    # ignore
+                    continue
                 if self.done:
                     break
                 self.prefetch_queue.put(example)
