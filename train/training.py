@@ -192,7 +192,7 @@ class LanguageModelTrainer:
                                     (ce_loss, kl_loss), logits = self.model.backpropagate_logits(
                                         x, y, src_logits,
                                         self.scalar, self.training_config.hyper_save_memory,
-                                        backpropage_ys=True
+                                        back_propagate_ys=True
                                     )
                                     loss = kl_loss + ce_loss
                             except RuntimeError as e:

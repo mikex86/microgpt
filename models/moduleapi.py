@@ -41,7 +41,7 @@ class ILanguageModel(torch.nn.Module):
     def backpropagate_logits(self, x: torch.tensor, y: torch, target_logits: torch.tensor,
                              loss_scalar: GradScaler = None,
                              hyper_save_memory: bool = False,
-                             backpropage_ys: bool = True,
+                             back_propagate_ys: bool = True,
                              ) -> Tuple[Tuple[float, Optional[float]], torch.Tensor]:
         """
         Back-propagates the kl-divergence between the given logits and this model's predicted logits.
@@ -51,8 +51,8 @@ class ILanguageModel(torch.nn.Module):
         :param loss_scalar: the GradScaler used to scale the loss
         :param hyper_save_memory: whether to delete unused tensors and free the cuda cache between each chunk.
         :return: the un-scaled loss as calculated as kl-divergence(self(x), target_logits)
-        :param backpropage_ys: whether to backpropagate the crossentropy between self(x) and y as well
-        and crossentropy(self(x), y) if backpropage_ys is True as a tuple and the computed logits
+        :param back_propagate_ys: whether to backpropagate the crossentropy between self(x) and y as well
+        and crossentropy(self(x), y) if back_propagate_ys is True as a tuple and the computed logits
         """
         pass
 
@@ -128,7 +128,7 @@ class BasicLanguageModel(ILanguageModel, ABC):
     def backpropagate_logits(self, x: torch.tensor, y: torch.tensor, target_logits: torch.tensor,
                              loss_scalar: GradScaler = None,
                              hyper_save_memory: bool = False,
-                             backpropagate_ys: bool = True) -> Tuple[Tuple[float, Optional[float]], torch.Tensor]:
+                             back_propagate_ys: bool = True) -> Tuple[Tuple[float, Optional[float]], torch.Tensor]:
         self.train()
         device = next(self.parameters()).device
         logits = self(x)
@@ -137,7 +137,7 @@ class BasicLanguageModel(ILanguageModel, ABC):
                                              reduction='batchmean',
                                              log_target=True)
 
-        if backpropagate_ys:
+        if back_propagate_ys:
             ce_loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
             loss = kl_loss + ce_loss
         else:
