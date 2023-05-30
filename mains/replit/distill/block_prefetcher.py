@@ -52,7 +52,7 @@ class BlockStreamingProcess(multiprocessing.Process):
         dtype_bytes = np.dtype(self.token_dtype).itemsize
         file = self.files[file_name]
         block = self.__buffered_read(file, self.block_size * dtype_bytes)
-        block = np.frombuffer(block, dtype=self.token_dtype).astype(np.int32)
+        block = np.frombuffer(block, dtype=self.token_dtype).astype(np.int64)
         return block
 
     def run(self) -> None:

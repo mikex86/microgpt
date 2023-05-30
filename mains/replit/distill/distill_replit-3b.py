@@ -42,7 +42,7 @@ def main():
     checkpointing.load_checkpoint(src_model, None, 'checkpoints/replit-3b', 'best', load_lazy=True)
 
     dst_config = ReplitLMConfig(
-        d_model=2568,
+        d_model=1536,
         n_heads=12,
         n_layers=12,
         mlp_ratio=4,
@@ -85,7 +85,7 @@ def main():
         # teacher model
         src_model=src_model,  # switches into distill mode
 
-        batch_size=1,
+        batch_size=7,
         n_mini_steps=5,
 
         min_learning_rate=6e-6,
