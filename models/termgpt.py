@@ -241,8 +241,8 @@ class TerminalGptModel(ISparselyWeightDecayedModule, ILanguageModel):
             no_weight_decay_params=no_weight_decay_params
         )
 
-    def back_propagate(self, x: torch.tensor, targets: torch.tensor, loss_scalar: GradScaler = None,
-                       hyper_save_memory: bool = False) -> Tuple[float, torch.Tensor]:
+    def back_propagate_targets(self, x: torch.tensor, targets: torch.tensor, loss_scalar: GradScaler = None,
+                               hyper_save_memory: bool = False) -> Tuple[float, torch.Tensor]:
         self.train()
         device = next(self.parameters()).device
 

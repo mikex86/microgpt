@@ -292,9 +292,9 @@ class MemGptModel(ISparselyWeightDecayedModule, ILanguageModel):
         h = torch.cat(output, dim=1)  # (b, t1 * t2, c)
         return self.lm_head(h)
 
-    def back_propagate(self, x: torch.tensor, targets: torch.tensor,
-                       loss_scalar: GradScaler = None,
-                       hyper_save_memory: bool = False) -> Tuple[float, torch.Tensor]:
+    def back_propagate_targets(self, x: torch.tensor, targets: torch.tensor,
+                               loss_scalar: GradScaler = None,
+                               hyper_save_memory: bool = False) -> Tuple[float, torch.Tensor]:
         self.train()
 
         # TODO: remove hack

@@ -42,7 +42,8 @@ def main():
 
     def on_mini_step(
             step: int, mini_step: int,
-            _loss: float,
+            _ce_loss: float,
+            _kl_loss: float,
             _x: torch.tensor,  # (batch_size, block_size)
             y: torch.tensor,  # (batch_size, 1)
             logits: torch.tensor  # (batch_size, vocab_size)

@@ -6,7 +6,7 @@ on:
       - master
 
 jobs:
-  build:
+  build-replit-distill:
     runs-on: ubuntu-latest
 
     steps:
@@ -27,6 +27,6 @@ jobs:
       uses: docker/build-push-action@v2
       with:
         context: .
-        file: ./dockerfiles/Dockerfile_memgpt_owt
+        file: ./dockerfiles/Dockerfile_replit_distill
         push: true
-        tags: ghcr.io/${{ github.repository_owner }}/microgpt:memgpt-owt
+        tags: ghcr.io/${{ github.repository_owner }}/microgpt:replit-distill

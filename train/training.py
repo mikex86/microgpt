@@ -4,7 +4,7 @@ import shutil
 import time
 from contextlib import nullcontext
 from dataclasses import dataclass
-from typing import Tuple, Callable
+from typing import Tuple, Callable, Optional
 
 import torch
 from torch.optim import AdamW
@@ -50,10 +50,14 @@ class TrainingConfig:
     device: torch.device
     dtype: torch.dtype
 
+    # Distill model. If present, will be used to distill the src_model
+    src_model: Optional[ILanguageModel] = None
+
     # Listeners
     #
-    # Mini-step listener. (step, mini_step, loss, x, y, logits)
-    mini_step_listener: Callable[[int, int, float, torch.tensor, torch.tensor, torch.tensor], None] = None
+    # kl_loss only present if distillation is enabled
+    # Mini-step listener. (step, mini_step, ce_loss, kl_loss: optional, x, y, logits)
+    mini_step_listener: Callable[[int, int, float, float, torch.tensor, torch.tensor, torch.tensor], None] = None
 
     """
     Whether to delete loss and dependent tensors between mini steps.
@@ -174,10 +178,23 @@ class LanguageModelTrainer:
                     for ministep in range(self.training_config.n_mini_steps):
                         with self.autocast_ctx:
                             try:
-                                loss, logits = self.model.back_propagate(
-                                    x, y,
-                                    self.scalar, self.training_config.hyper_save_memory
-                                )
+                                if self.training_config.src_model is None:
+                                    ce_loss, logits = self.model.back_propagate_targets(
+                                        x, y,
+                                        self.scalar, self.training_config.hyper_save_memory
+                                    )
+                                    loss = ce_loss
+                                else:
+                                    with torch.no_grad():
+                                        self.training_config.src_model.eval()
+                                        src_logits = self.training_config.src_model(x)
+
+                                    (ce_loss, kl_loss), logits = self.model.backpropagate_logits(
+                                        x, y, src_logits,
+                                        self.scalar, self.training_config.hyper_save_memory,
+                                        backpropage_ys=True
+                                    )
+                                    loss = kl_loss + ce_loss
                             except RuntimeError as e:
                                 if "CUDA out of memory" in str(e):
                                     logging.log_oom(self.current_step)
@@ -185,18 +202,13 @@ class LanguageModelTrainer:
                                     torch.cuda.empty_cache()
                                     # try to recover from OOM
                                     self.model.zero_grad(set_to_none=True)
-                                    # load latest checkpoint
-                                    checkpointing.load_checkpoint(
-                                        self.model, self.optimizer,
-                                        self.training_config.checkpoint_dir_path, "latest"
-                                    )
-                                    nan_loss_recovery = True
                                     break
                                 else:
                                     raise e
 
                             if self.training_config.mini_step_listener is not None:
-                                self.training_config.mini_step_listener(self.current_step, ministep, loss, x, y, logits)
+                                self.training_config.mini_step_listener(self.current_step, ministep, ce_loss, kl_loss,
+                                                                        x, y, logits)
 
                             # check if loss is nan
                             if math.isnan(loss):

@@ -1,6 +1,6 @@
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
-from typing import List, Callable, Tuple
+from typing import List, Callable, Tuple, Optional
 
 import torch.nn
 from torch.cuda.amp import GradScaler
@@ -22,9 +22,9 @@ class ISparselyWeightDecayedModule(torch.nn.Module):
 class ILanguageModel(torch.nn.Module):
 
     @abstractmethod
-    def back_propagate(self, x: torch.tensor, targets: torch.tensor,
-                       loss_scalar: GradScaler = None,
-                       hyper_save_memory: bool = False) -> Tuple[float, torch.Tensor]:
+    def back_propagate_targets(self, x: torch.tensor, targets: torch.tensor,
+                               loss_scalar: GradScaler = None,
+                               hyper_save_memory: bool = False) -> Tuple[float, torch.Tensor]:
         """
         Back-propagates the cross entropy scaled loss between
         the given targets and the model's predictions and returns the un-scaled loss
@@ -34,6 +34,25 @@ class ILanguageModel(torch.nn.Module):
         :param hyper_save_memory: whether to delete unused tensors and free the cuda cache between each chunk.
         Only use when absolutely necessary to avoid OOM errors.
         :return: the un-scaled loss
+        """
+        pass
+
+    @abstractmethod
+    def backpropagate_logits(self, x: torch.tensor, y: torch, target_logits: torch.tensor,
+                             loss_scalar: GradScaler = None,
+                             hyper_save_memory: bool = False,
+                             backpropage_ys: bool = True,
+                             ) -> Tuple[Tuple[float, Optional[float]], torch.Tensor]:
+        """
+        Back-propagates the kl-divergence between the given logits and this model's predicted logits.
+        :param x: the input sequence (b, t)
+        :param y: the target sequence (b, t)
+        :param target_logits: the target logits, (b, t, v)
+        :param loss_scalar: the GradScaler used to scale the loss
+        :param hyper_save_memory: whether to delete unused tensors and free the cuda cache between each chunk.
+        :return: the un-scaled loss as calculated as kl-divergence(self(x), target_logits)
+        :param backpropage_ys: whether to backpropagate the crossentropy between self(x) and y as well
+        and crossentropy(self(x), y) if backpropage_ys is True as a tuple and the computed logits
         """
         pass
 
@@ -83,8 +102,8 @@ class BasicLanguageModel(ILanguageModel, ABC):
             tokens.append(token)
         self.train()
 
-    def back_propagate(self, x: torch.tensor, targets: torch.tensor, loss_scalar: GradScaler = None,
-                       hyper_save_memory: bool = False) -> Tuple[float, torch.Tensor]:
+    def back_propagate_targets(self, x: torch.tensor, targets: torch.tensor, loss_scalar: GradScaler = None,
+                               hyper_save_memory: bool = False) -> Tuple[float, torch.Tensor]:
         self.train()
         device = next(self.parameters()).device
         logits = self(x)
@@ -106,6 +125,41 @@ class BasicLanguageModel(ILanguageModel, ABC):
 
         return unscaled_loss, logits_copy
 
+    def backpropagate_logits(self, x: torch.tensor, y: torch.tensor, target_logits: torch.tensor,
+                             loss_scalar: GradScaler = None,
+                             hyper_save_memory: bool = False,
+                             backpropagate_ys: bool = True) -> Tuple[Tuple[float, Optional[float]], torch.Tensor]:
+        self.train()
+        device = next(self.parameters()).device
+        logits = self(x)
+        kl_loss = torch.nn.functional.kl_div(logits.view(-1, logits.size(-1)).log_softmax(dim=-1),
+                                             target_logits.view(-1, target_logits.size(-1)).softmax(dim=-1),
+                                             reduction='batchmean',
+                                             log_target=True)
+
+        if backpropagate_ys:
+            ce_loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+            loss = kl_loss + ce_loss
+        else:
+            ce_loss = None
+            loss = kl_loss
+
+        kl_loss = kl_loss.item()
+
+        if loss_scalar is not None:
+            loss = loss_scalar.scale(loss)
+        loss.backward()
+
+        logits_copy = logits.detach().clone()
+
+        if hyper_save_memory:
+            del logits
+            del loss
+            if device.type == 'cuda':
+                torch.cuda.empty_cache()
+
+        return (kl_loss, ce_loss), logits_copy
+
     @torch.no_grad()
     def get_eval_loss(self, x: torch.tensor, y: torch.tensor) -> float:
         self.eval()
@@ -117,7 +171,6 @@ class BasicLanguageModel(ILanguageModel, ABC):
         del loss
 
         return loss_item
-
 
     @property
     @abstractmethod
