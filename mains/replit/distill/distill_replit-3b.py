@@ -54,7 +54,7 @@ def main():
         alibi_bias_max=8,
         use_bias=False,
         device=device,
-        dtype=torch.bfloat16
+        dtype=torch.float32
     )
     dst_model = ReplitLM(dst_config)
 
@@ -86,7 +86,7 @@ def main():
         src_model=src_model,  # switches into distill mode
 
         batch_size=7,
-        n_mini_steps=5,
+        n_mini_steps=1,
 
         min_learning_rate=6e-6,
         max_learning_rate=6e-4,

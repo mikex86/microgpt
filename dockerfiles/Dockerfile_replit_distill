@@ -7,6 +7,10 @@ RUN pip install wandb tqdm --no-cache-dir
 # Copy files
 COPY . /workspace
 
+# Set environment variables
+ENV OPENBLAS_NUM_THREADS=1
+
+
 # Run training
 WORKDIR /workspace
 ENV PYTHONPATH=/workspace

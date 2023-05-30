@@ -134,8 +134,7 @@ class BasicLanguageModel(ILanguageModel, ABC):
         logits = self(x)
         kl_loss = torch.nn.functional.kl_div(logits.view(-1, logits.size(-1)).log_softmax(dim=-1),
                                              target_logits.view(-1, target_logits.size(-1)).softmax(dim=-1),
-                                             reduction='batchmean',
-                                             log_target=True)
+                                             reduction='batchmean')
 
         if back_propagate_ys:
             ce_loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
@@ -145,6 +144,7 @@ class BasicLanguageModel(ILanguageModel, ABC):
             loss = kl_loss
 
         kl_loss = kl_loss.item()
+        ce_loss = ce_loss.item() if ce_loss is not None else None
 
         if loss_scalar is not None:
             loss = loss_scalar.scale(loss)
