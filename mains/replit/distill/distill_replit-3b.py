@@ -113,7 +113,7 @@ def main():
         betas=(0.9, 0.999),
 
         device=device,
-        dtype=torch.float16,
+        dtype=torch.bfloat16,
 
         evaluation_period=50,
         num_evaluation_steps=12,
