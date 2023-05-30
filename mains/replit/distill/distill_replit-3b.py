@@ -5,7 +5,7 @@ import os
 import numpy as np
 import torch
 
-from mains.replit.distill import block_prefetcher
+from data.dataset import S3FolderDataset
 from models.replit import ReplitLMConfig, ReplitLM
 from train import checkpointing, logging
 from train.training import TrainingConfig, LanguageModelTrainer
@@ -69,23 +69,37 @@ def main():
     # drop 0 probability languages
     language_probabilities = {k: v for k, v in language_probabilities.items() if v > 0}
 
-    train_val_probs = (0.99, 0.01)
+    def filter_and_prob_supplier(name: str, is_train: bool):
+        # extract language from name and associated probability
+        lang = name.split("/")[-1].split('-')[-2]
+        prob = language_probabilities.get(lang, 0.0)
+        if is_train:
+            return 'train' in name, prob
+        else:
+            return 'val' in name, prob
 
-    num_blocks_in_flight = 64
+    train_it = S3FolderDataset(
+        f"{s3_bucket}/{s3_prefix}",
+        lambda s: filter_and_prob_supplier(s, True),
+        src_config.max_seq_len,
+        np.dtype(np.uint16),
+    )
 
-    train_it, val_it = block_prefetcher.get_block_iters(f"{s3_bucket}/{s3_prefix}", language_probabilities,
-                                                        num_blocks_in_flight,
-                                                        src_config.max_seq_len,
-                                                        train_val_probs, np.uint16)
+    val_it = S3FolderDataset(
+        f"{s3_bucket}/{s3_prefix}",
+        lambda s: filter_and_prob_supplier(s, False),
+        src_config.max_seq_len,
+        np.dtype(np.uint16),
+    )
 
     training_config = TrainingConfig(
-        train_dataset_iterator=train_it,
-        val_dataset_iterator=val_it,
+        train_dataset_iterator=iter(train_it),
+        val_dataset_iterator=iter(val_it),
 
         # teacher model
         src_model=src_model,  # switches into distill mode
 
-        batch_size=7,
+        batch_size=11,
         n_mini_steps=1,
 
         min_learning_rate=6e-6,

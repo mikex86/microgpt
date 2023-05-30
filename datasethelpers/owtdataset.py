@@ -1,7 +1,6 @@
 import os
 from urllib.request import urlretrieve
-
-from progressbar import progressbar
+import progressbar
 
 BUCKET_URL = "https://micro-gpt-datasets-us.s3.us-west-1.amazonaws.com"
 

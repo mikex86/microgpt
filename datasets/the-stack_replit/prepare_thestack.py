@@ -33,7 +33,7 @@ def list_parquet_files(repo_id: str, patterns: List[str]):
     return files_list
 
 
-TOKEN_BUFFER_SIZE = 10000
+TOKEN_BUFFER_SIZE = 1000
 
 
 def _flush_token_buffer(token_buffer, out_file):
