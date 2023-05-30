@@ -1,9 +1,8 @@
 import multiprocessing
 import os
 import queue
-import sys
 import threading
-from typing import Mapping, Tuple, Iterator, List
+from typing import Mapping, Tuple, Iterator, List, Optional
 
 import numpy as np
 import s3fs as s3fs
@@ -33,13 +32,16 @@ class BlockStreamingProcess(multiprocessing.Process):
         self.buffer_read_pos = 0
         self.buffer_write_pos = 0
 
-    def __buffered_read(self, file, n_bytes):
+    def __buffered_read(self, file, n_bytes) -> Optional[bytearray]:
         bytes_read = 0
         while bytes_read < n_bytes:
             if self.buffer_read_pos == self.buffer_write_pos:
                 # buffer is empty, read more data
                 self.buffer_read_pos = 0
+                prev_buffer_write_pos = self.buffer_write_pos
                 self.buffer_write_pos = file.readinto(self.buffer)
+                if prev_buffer_write_pos == 0 and self.buffer_write_pos == 0:
+                    return None
                 if self.buffer_write_pos == 0:
                     file.seek(0)
                     continue
@@ -48,10 +50,12 @@ class BlockStreamingProcess(multiprocessing.Process):
             bytes_read += bytes_to_read
         return self.buffer[self.buffer_read_pos - bytes_read:self.buffer_read_pos]
 
-    def _read_next_block(self, file_name: str) -> np.ndarray:
+    def _read_next_block(self, file_name: str) -> Optional[np.ndarray]:
         dtype_bytes = np.dtype(self.token_dtype).itemsize
         file = self.files[file_name]
         block = self.__buffered_read(file, self.block_size * dtype_bytes)
+        if block is None:
+            return None
         block = np.frombuffer(block, dtype=self.token_dtype).astype(np.int64)
         return block
 
@@ -59,6 +63,8 @@ class BlockStreamingProcess(multiprocessing.Process):
         while True:
             file_name = self.rx_queue.get()  # wait for a signal to start reading
             block = self._read_next_block(file_name)
+            if block is None:
+                continue
             self.tx_queue.put(block)
 
 
