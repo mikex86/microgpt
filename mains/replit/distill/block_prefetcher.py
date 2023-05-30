@@ -109,7 +109,7 @@ def get_block_iters(dataset_s3_folder: str,
                     raise ValueError(f"Unknown dataset split type: {file}")
 
     # create block streaming processes for each language file
-    n_files_per_process = 128
+    n_files_per_process = 500
     processes = {}
     queues = {}
 
