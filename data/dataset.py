@@ -98,9 +98,9 @@ class S3AsyncReader(multiprocessing.Process):
     def run(self) -> None:
         while True:
             file_name = self.rx_queue.get()  # wait for a signal to start reading
-            block = None
-            while block is None:
-                block = self._read_next_block(file_name, True)
+            block = self._read_next_block(file_name, True)
+            if block is None:
+                continue
             self.tx_queue.put(block)
 
 
