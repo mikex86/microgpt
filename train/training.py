@@ -138,6 +138,12 @@ class LanguageModelTrainer:
         self.autocast_ctx = nullcontext() if device_type == "cpu" else \
             torch.amp.autocast(device_type=device_type, dtype=self.training_config.dtype)
 
+        self.val_it = iterator_utils.prefetching_iterator(
+            iterator_utils.make_batched_iterator(dataset_iterator=self.training_config.val_dataset_iterator,
+                                                 batch_size=self.training_config.batch_size,
+                                                 device=self.training_config.device), num_prefetch=128
+        )
+
     def train(self):
         """
         Performs the main training loop of the model
@@ -288,13 +294,10 @@ class LanguageModelTrainer:
         """
         Performs evaluation of the model and returns the evaluation loss
         """
-        val_it = iterator_utils.make_batched_iterator(dataset_iterator=self.training_config.val_dataset_iterator,
-                                                      batch_size=self.training_config.batch_size,
-                                                      device=self.training_config.device)
 
         total_loss = 0
         for i in range(self.training_config.num_evaluation_steps):
-            x, y = next(val_it)
+            x, y = next(self.val_it)
             with self.autocast_ctx:
                 loss = self.model.get_eval_loss(x, y)
                 total_loss += loss
