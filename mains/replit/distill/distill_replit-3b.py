@@ -54,7 +54,7 @@ def main():
         alibi_bias_max=8,
         use_bias=False,
         device=device,
-        dtype=torch.float16,
+        dtype=torch.bfloat16,
     )
     dst_model = ReplitLM(dst_config)
 
@@ -113,7 +113,7 @@ def main():
         betas=(0.9, 0.999),
 
         device=device,
-        dtype=torch.float16,
+        dtype=torch.bfloat16,
 
         evaluation_period=100,
         num_evaluation_steps=12,
