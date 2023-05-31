@@ -3,6 +3,7 @@ import os
 import queue
 import time
 from abc import abstractmethod
+from collections import Counter
 from typing import Iterator, Tuple, Callable, Optional, List
 
 import numpy as np
@@ -105,11 +106,11 @@ class S3AsyncReader(multiprocessing.Process):
 
 class S3FolderDataset(Dataset):
 
-    def __init__(self, folder_path: str, name_predicate_and_sampling_prob: Callable[[str], Tuple[bool, float]],
+    def __init__(self, folder_path: str, group_filter_prob_supplier: Callable[[str], Tuple[any, bool, float]],
                  seq_len: int,
                  token_dtype: np.dtype) -> None:
         self.folder_path = folder_path
-        self.name_predicate_and_sampling_prob = name_predicate_and_sampling_prob
+        self.group_filter_prob_supplier = group_filter_prob_supplier
         self.seq_len = seq_len
         self.token_dtype = token_dtype
 
@@ -119,6 +120,7 @@ class S3FolderDataset(Dataset):
         files = []
         file_sizes = []
         unnorm_probs = []
+        groups = []
 
         files_for_proc = []
         files_per_proc = 64
@@ -138,18 +140,26 @@ class S3FolderDataset(Dataset):
             file_sizes = []
 
         for file_name in tqdm(s3.ls(self.folder_path), desc="Listing s3 files..."):
-            should_read, sampling_probability = self.name_predicate_and_sampling_prob(file_name)
+            group, should_read, sampling_probability = self.group_filter_prob_supplier(file_name)
             if should_read:
                 files_for_proc.append(file_name)
-
                 files.append(file_name)
                 file_size = s3.du(file_name)
                 file_sizes.append(file_size)
+                groups.append(group)
+
                 unnorm_probs.append(sampling_probability * file_size)
 
                 if len(files_for_proc) == files_per_proc:
                     _flush()
         _flush()
+
+        # Account for number of files in each group
+        # Together with prob being proportional to file size, this should give us a uniform distribution
+        # over all tokens in the dataset
+        group_counts = Counter(groups)
+        for i, file in enumerate(files):
+            unnorm_probs[i] /= group_counts[groups[i]]
 
         # Normalize probabilities
         probs = torch.tensor(unnorm_probs)
