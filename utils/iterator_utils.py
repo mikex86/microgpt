@@ -82,8 +82,7 @@ def prefetching_iterator(dataset_iterator: iter, num_prefetch: int):
                     print(e)
                     tb = traceback.format_exc()
                     print(tb)
-                    # ignore
-                    continue
+                    return
                 if self.done:
                     break
                 self.prefetch_queue.put(example)
