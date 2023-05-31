@@ -124,21 +124,29 @@ class S3FolderDataset(Dataset):
         files_per_proc = 64
         proc_for_file = {}
         queues_for_file = {}
+
+        def _flush():
+            nonlocal files_for_proc
+            rx_queue_ = multiprocessing.Queue()
+            tx_queue_ = multiprocessing.Queue()
+            proc = S3AsyncReader(files_for_proc, self.token_dtype, self.seq_len, rx_queue_, tx_queue_)
+            proc.start()
+            for f in files_for_proc:
+                proc_for_file[f] = proc
+                queues_for_file[f] = {"rx": tx_queue_, "tx": rx_queue_}
+            files_for_proc = []
+
         for file_name in tqdm(s3.ls(self.folder_path), desc="Listing s3 files..."):
             should_read, sampling_probability = self.name_predicate_and_sampling_prob(file_name)
             if should_read:
                 files_for_proc.append(file_name)
+
                 files.append(file_name)
                 probs.append(sampling_probability)
+
                 if len(files_for_proc) == files_per_proc:
-                    rx_queue = multiprocessing.Queue()
-                    tx_queue = multiprocessing.Queue()
-                    proc = S3AsyncReader(files_for_proc, self.token_dtype, self.seq_len, rx_queue, tx_queue)
-                    proc.start()
-                    for file in files_for_proc:
-                        proc_for_file[file] = proc
-                        queues_for_file[file] = {"rx": tx_queue, "tx": rx_queue}
-                    files_for_proc = []
+                    _flush()
+        _flush()
 
         # Normalize probabilities
         probs = torch.tensor(probs)
