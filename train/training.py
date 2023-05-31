@@ -158,7 +158,9 @@ class LanguageModelTrainer:
                     num_prefetch=128
             ) as train_it:
                 while self.current_step < self.training_config.max_steps:
+                    print("pre next(train_it)")
                     x, y = next(train_it)
+                    print("post next(train_it)")
                     step_start_time = time.time()
 
                     # update learning rate
@@ -189,12 +191,12 @@ class LanguageModelTrainer:
                                         self.training_config.src_model.eval()
                                         src_logits = self.training_config.src_model(x)
 
-                                    (ce_loss, kl_loss), logits = self.model.backpropagate_logits(
+                                    (kl_loss, _), logits = self.model.backpropagate_logits(
                                         x, y, src_logits,
                                         self.scalar, self.training_config.hyper_save_memory,
-                                        back_propagate_ys=True
+                                        back_propagate_ys=False
                                     )
-                                    loss = kl_loss + ce_loss
+                                    loss = kl_loss
                             except RuntimeError as e:
                                 if "CUDA out of memory" in str(e):
                                     logging.log_oom(self.current_step)
