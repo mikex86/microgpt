@@ -69,25 +69,25 @@ def main():
     # drop 0 probability languages
     language_probabilities = {k: v for k, v in language_probabilities.items() if v > 0}
 
-    def filter_and_prob_supplier(name: str, is_train: bool):
+    def group_filter_and_prob_supplier(name: str, is_train: bool):
         # extract language from name and associated probability
         lang = name.split("/")[-1].split('-')[-2]
         prob = language_probabilities.get(lang, 0.0)
         if is_train:
-            return 'train' in name, prob
+            return lang, 'train' in name, prob
         else:
-            return 'val' in name, prob
+            return lang, 'val' in name, prob
 
     train_it = S3FolderDataset(
         f"{s3_bucket}/{s3_prefix}",
-        lambda s: filter_and_prob_supplier(s, True),
+        lambda s: group_filter_and_prob_supplier(s, True),
         dst_config.max_seq_len,
         np.dtype(np.uint16),
     )
 
     val_it = S3FolderDataset(
         f"{s3_bucket}/{s3_prefix}",
-        lambda s: filter_and_prob_supplier(s, False),
+        lambda s: group_filter_and_prob_supplier(s, False),
         dst_config.max_seq_len,
         np.dtype(np.uint16),
     )
@@ -104,7 +104,7 @@ def main():
 
         min_learning_rate=1e-9,
         max_learning_rate=1e-6,
-        warmup_steps=10000,
+        warmup_steps=5000,
         max_steps=6000000,
 
         grad_clip=0.01,
