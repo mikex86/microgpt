@@ -44,7 +44,7 @@ def main():
     dst_config = ReplitLMConfig(
         d_model=1536,
         n_heads=12,
-        n_layers=12,
+        n_layers=6,
         mlp_ratio=4,
         max_seq_len=2048,
         vocab_size=32768,
@@ -54,7 +54,7 @@ def main():
         alibi_bias_max=8,
         use_bias=False,
         device=device,
-        dtype=torch.float32
+        dtype=torch.float16,
     )
     dst_model = ReplitLM(dst_config)
 
@@ -81,14 +81,14 @@ def main():
     train_it = S3FolderDataset(
         f"{s3_bucket}/{s3_prefix}",
         lambda s: filter_and_prob_supplier(s, True),
-        src_config.max_seq_len,
+        dst_config.max_seq_len,
         np.dtype(np.uint16),
     )
 
     val_it = S3FolderDataset(
         f"{s3_bucket}/{s3_prefix}",
         lambda s: filter_and_prob_supplier(s, False),
-        src_config.max_seq_len,
+        dst_config.max_seq_len,
         np.dtype(np.uint16),
     )
 
@@ -102,9 +102,9 @@ def main():
         batch_size=10,
         n_mini_steps=1,
 
-        min_learning_rate=6e-8,
-        max_learning_rate=6e-4,
-        warmup_steps=1000,
+        min_learning_rate=1e-9,
+        max_learning_rate=1e-6,
+        warmup_steps=10000,
         max_steps=6000000,
 
         grad_clip=0.01,
@@ -113,7 +113,7 @@ def main():
         betas=(0.9, 0.999),
 
         device=device,
-        dtype=torch.bfloat16,
+        dtype=torch.float16,
 
         evaluation_period=100,
         num_evaluation_steps=12,
