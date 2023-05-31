@@ -3,7 +3,6 @@ import os
 import queue
 import time
 from abc import abstractmethod
-from asyncio import Queue
 from typing import Iterator, Tuple, Callable, Optional, List
 
 import numpy as np
@@ -61,7 +60,7 @@ class S3FileDataset(Dataset):
 
 class S3AsyncReader(multiprocessing.Process):
 
-    def __init__(self, file_names: List[str], token_dtype: np.dtype, block_size: int,
+    def __init__(self, file_names: List[str], file_sizes: List[int], token_dtype: np.dtype, block_size: int,
                  rx_queue: multiprocessing.Queue,
                  tx_queue: multiprocessing.Queue):
         super().__init__()
@@ -72,7 +71,7 @@ class S3AsyncReader(multiprocessing.Process):
         self.files = {file: s3.open(file, 'rb') for file in file_names}
         self.token_dtype = token_dtype
         self.block_size = block_size
-        self.file_sizes = {file: s3.du(file) for file in file_names}
+        self.file_sizes = {file: file_sizes[i] for i, file in enumerate(file_names)}
         self.rx_queue = rx_queue
         self.tx_queue = tx_queue
 
@@ -118,7 +117,8 @@ class S3FolderDataset(Dataset):
         s3 = s3fs.S3FileSystem(anon=True)
 
         files = []
-        probs = []
+        file_sizes = []
+        unnorm_probs = []
 
         files_for_proc = []
         files_per_proc = 64
@@ -126,15 +126,16 @@ class S3FolderDataset(Dataset):
         queues_for_file = {}
 
         def _flush():
-            nonlocal files_for_proc
+            nonlocal files_for_proc, file_sizes
             rx_queue_ = multiprocessing.Queue()
             tx_queue_ = multiprocessing.Queue()
-            proc = S3AsyncReader(files_for_proc, self.token_dtype, self.seq_len, rx_queue_, tx_queue_)
+            proc = S3AsyncReader(files_for_proc, file_sizes, self.token_dtype, self.seq_len, rx_queue_, tx_queue_)
             proc.start()
             for f in files_for_proc:
                 proc_for_file[f] = proc
                 queues_for_file[f] = {"rx": tx_queue_, "tx": rx_queue_}
             files_for_proc = []
+            file_sizes = []
 
         for file_name in tqdm(s3.ls(self.folder_path), desc="Listing s3 files..."):
             should_read, sampling_probability = self.name_predicate_and_sampling_prob(file_name)
@@ -142,14 +143,16 @@ class S3FolderDataset(Dataset):
                 files_for_proc.append(file_name)
 
                 files.append(file_name)
-                probs.append(sampling_probability)
+                file_size = s3.du(file_name)
+                file_sizes.append(file_size)
+                unnorm_probs.append(sampling_probability * file_size)
 
                 if len(files_for_proc) == files_per_proc:
                     _flush()
         _flush()
 
         # Normalize probabilities
-        probs = torch.tensor(probs)
+        probs = torch.tensor(unnorm_probs)
         probs /= probs.sum()
 
         expecting_queues = set()
