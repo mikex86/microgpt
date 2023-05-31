@@ -44,7 +44,7 @@ def main():
     dst_config = ReplitLMConfig(
         d_model=1536,
         n_heads=12,
-        n_layers=6,
+        n_layers=12,
         mlp_ratio=4,
         max_seq_len=2048,
         vocab_size=32768,
