@@ -139,7 +139,6 @@ class S3FolderDataset(Dataset):
                         proc_for_file[file] = proc
                         queues_for_file[file] = {"rx": tx_queue, "tx": rx_queue}
                     files_for_proc = []
-                    probs = []
 
         # Normalize probabilities
         probs = torch.tensor(probs)
