@@ -99,13 +99,13 @@ def main():
         # teacher model
         src_model=src_model,  # switches into distill mode
 
-        batch_size=11,
+        batch_size=10,
         n_mini_steps=1,
 
-        min_learning_rate=6e-6,
+        min_learning_rate=6e-8,
         max_learning_rate=6e-4,
-        warmup_steps=100,
-        max_steps=600000,
+        warmup_steps=1000,
+        max_steps=6000000,
 
         grad_clip=0.01,
 
@@ -115,7 +115,7 @@ def main():
         device=device,
         dtype=torch.bfloat16,
 
-        evaluation_period=50,
+        evaluation_period=100,
         num_evaluation_steps=12,
 
         checkpoint_dir_path="checkpoints/replit-distill-1b",

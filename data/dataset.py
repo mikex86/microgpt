@@ -93,23 +93,10 @@ class S3AsyncReader(multiprocessing.Process):
         return block
 
     def run(self) -> None:
-        sequential_blocks = []
         while True:
             file_name = self.rx_queue.get()  # wait for a signal to start reading
             block = self._read_next_block(file_name, True)
             self.tx_queue.put(block)
-
-            # more blocks without random seek to increase performance
-            sequential_blocks.append(self._read_next_block(file_name, False))
-            sequential_blocks.append(self._read_next_block(file_name, False))
-            sequential_blocks.append(self._read_next_block(file_name, False))
-            sequential_blocks.append(self._read_next_block(file_name, False))
-
-            if len(sequential_blocks) > 32:
-                # shuffle
-                np.random.shuffle(sequential_blocks)
-                for block in sequential_blocks:
-                    self.tx_queue.put(block)
 
 
 class S3FolderDataset(Dataset):
@@ -129,7 +116,7 @@ class S3FolderDataset(Dataset):
         probs = []
 
         files_for_proc = []
-        files_per_proc = 128
+        files_per_proc = 64
         proc_for_file = {}
         queues_for_file = {}
         for file_name in tqdm(s3.ls(self.folder_path), desc="Listing s3 files..."):

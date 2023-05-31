@@ -158,9 +158,7 @@ class LanguageModelTrainer:
                     num_prefetch=128
             ) as train_it:
                 while self.current_step < self.training_config.max_steps:
-                    print("pre next(train_it)")
                     x, y = next(train_it)
-                    print("post next(train_it)")
                     step_start_time = time.time()
 
                     # update learning rate
