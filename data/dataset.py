@@ -81,6 +81,9 @@ class S3AsyncReader(multiprocessing.Process):
         file = self.files[file_name]
         file_size = self.file_sizes[file_name]
 
+        if file_size < (self.block_size + 1) * dtype_bytes:
+            return None
+
         if rand_seek:
             idx = torch.randint(low=0, high=file_size - (self.block_size + 1) * dtype_bytes - 1, size=(1,)).item()
             if idx % dtype_bytes != 0:
@@ -95,7 +98,9 @@ class S3AsyncReader(multiprocessing.Process):
     def run(self) -> None:
         while True:
             file_name = self.rx_queue.get()  # wait for a signal to start reading
-            block = self._read_next_block(file_name, True)
+            block = None
+            while block is None:
+                block = self._read_next_block(file_name, True)
             self.tx_queue.put(block)
 
 
