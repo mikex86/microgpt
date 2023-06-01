@@ -88,3 +88,25 @@ def log_oom(step: int):
     print(f"ERROR: Out of memory at step {step}!")
     if LOG_TO_WANDB:
         wandb.alert(title="Out of memory", text=f"Out of memory at step {step}!")
+
+
+def log_blocking_save(checkpoint_dir_path: str):
+    print(
+        f"WARNING: Blocking save of checkpoint to {checkpoint_dir_path}! Previous checkpoint hasn't finished saving yet!")
+    if LOG_TO_WANDB:
+        wandb.alert(title="Blocking save",
+                    text=f"Blocking save of checkpoint to {checkpoint_dir_path}! Previous checkpoint hasn't finished saving yet!")
+
+
+def log_async_save_start(save_id, checkpoint_dir_path: str):
+    print(f"Starting async save {save_id} to {checkpoint_dir_path}...")
+    if LOG_TO_WANDB:
+        wandb.alert(title="Async save start",
+                    text=f"Starting async save {save_id} to {checkpoint_dir_path}...")
+
+
+def log_async_save_end(save_id, checkpoint_dir_path: str):
+    print(f"Finished async save {save_id} to {checkpoint_dir_path}.")
+    if LOG_TO_WANDB:
+        wandb.alert(title="Async save end",
+                    text=f"Finished async save {save_id} to {checkpoint_dir_path}.")
