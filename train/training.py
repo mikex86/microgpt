@@ -333,7 +333,7 @@ class LanguageModelTrainer:
                     teacher_logits.view(-1, teacher_logits.size(-1)).softmax(dim=-1),
                     reduction='batchmean'
                 )
-                total_loss += loss
+                total_loss += loss.item()
         return total_loss / self.training_config.num_evaluation_steps
 
     def save_checkpoint(self, step: int, eval_loss: float, teacher_eval_loss: Optional[float]):
