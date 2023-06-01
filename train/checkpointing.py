@@ -37,6 +37,36 @@ def get_checkpoint_info(checkpoint_path: str, checkpoint_name: str) -> Checkpoin
 running_save_processes = {}
 
 
+# launch a separate process to save the checkpoint
+class SaveProcess(multiprocessing.Process):
+
+    def __init__(self, save_id, checkpoint_dir_path, checkpoint_info, model_state, optimizer_state):
+        super().__init__()
+        self.save_id = save_id
+        self.checkpoint_dir_path = checkpoint_dir_path
+        self.checkpoint_info = checkpoint_info
+        self.model_state = model_state
+        self.optimizer_state = optimizer_state
+
+    def run(self):
+        os.makedirs(self.checkpoint_dir_path, exist_ok=True)
+        checkpoint_info_file_path = os.path.join(self.checkpoint_dir_path, "checkpoint_info.json")
+        with open(checkpoint_info_file_path, "w") as f:
+            json.dump(self.checkpoint_info.__dict__, f)
+
+        checkpoint_file = os.path.join(self.checkpoint_dir_path, "checkpoint.model.pt")
+        torch.save({
+            "model_state_dict": self.model_state,
+        }, checkpoint_file)
+
+        checkpoint_file = os.path.join(self.checkpoint_dir_path, "checkpoint.optimizer.pt")
+        torch.save({
+            "optimizer_state_dict": self.optimizer_state,
+        }, checkpoint_file)
+
+        logging.log_async_save_end(self.save_id, self.checkpoint_dir_path)
+
+
 def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: str, checkpoint_info: CheckpointInfo):
     model_state_dict = model.state_dict()
     optimizer_state_dict = optimizer.state_dict()  # make a copy of the optimizer state
@@ -58,33 +88,6 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
         copy_model_state = copy.deepcopy(model_state_dict)
         copy_optimizer_state = copy.deepcopy(optimizer_state_dict)
 
-    # launch a separate process to save the checkpoint
-    class SaveProcess(multiprocessing.Process):
-
-        def __init__(self, save_id, model_state, optimizer_state):
-            super().__init__()
-            self.save_id = save_id
-            self.model_state = model_state
-            self.optimizer_state = optimizer_state
-
-        def run(self):
-            os.makedirs(checkpoint_dir_path, exist_ok=True)
-            checkpoint_info_file_path = os.path.join(checkpoint_dir_path, "checkpoint_info.json")
-            with open(checkpoint_info_file_path, "w") as f:
-                json.dump(checkpoint_info.__dict__, f)
-
-            checkpoint_file = os.path.join(checkpoint_dir_path, "checkpoint.model.pt")
-            torch.save({
-                "model_state_dict": self.model_state,
-            }, checkpoint_file)
-
-            checkpoint_file = os.path.join(checkpoint_dir_path, "checkpoint.optimizer.pt")
-            torch.save({
-                "optimizer_state_dict": self.optimizer_state,
-            }, checkpoint_file)
-
-            logging.log_async_save_end(save_id, checkpoint_dir_path)
-
     if checkpoint_dir_path in running_save_processes:
         # wait for the previous save process to finish
         if running_save_processes[checkpoint_dir_path].is_alive():
@@ -93,7 +96,7 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
         del running_save_processes[checkpoint_dir_path]
 
     save_id = hash(time.time())
-    save_process = SaveProcess(save_id, copy_model_state, copy_optimizer_state)
+    save_process = SaveProcess(save_id, checkpoint_dir_path, checkpoint_info, copy_model_state, copy_optimizer_state)
     save_process.start()
     logging.log_async_save_start(save_id, checkpoint_dir_path)
 
