@@ -79,7 +79,8 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
 
     if checkpoint_dir_path in running_save_processes:
         # wait for the previous save process to finish
-        logging.log_blocking_save(checkpoint_dir_path)
+        if running_save_processes[checkpoint_dir_path].is_alive():
+            logging.log_blocking_save(checkpoint_dir_path)
         running_save_processes[checkpoint_dir_path].join()
         del running_save_processes[checkpoint_dir_path]
 
