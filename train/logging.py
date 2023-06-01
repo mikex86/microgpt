@@ -66,7 +66,7 @@ def log_save_checkpoint(checkpoint_info: 'CheckpointInfo', saving_time_seconds: 
     if LOG_TO_CONSOLE:
         print(
             f"Saved checkpoint at step {checkpoint_info.step}"
-            f" with loss/val = {checkpoint_info.val_loss:.4f} took {saving_time_seconds:.3f}s"
+            f" with loss/val = {checkpoint_info.val_loss:.4f} blocked main thread for {saving_time_seconds:.3f}s"
         )
 
 
