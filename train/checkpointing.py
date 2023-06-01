@@ -76,7 +76,6 @@ class SaveProcessWatcher(threading.Thread):
 
     def run(self):
         self.process.join()
-        del running_save_processes[self.process.save_id]
         logging.log_async_save_end(self.save_id, self.checkpoint_dir_path)
 
 
