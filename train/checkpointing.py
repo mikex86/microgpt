@@ -56,14 +56,20 @@ class SaveProcess(multiprocessing.Process):
             json.dump(self.checkpoint_info.__dict__, f)
 
         checkpoint_file = os.path.join(self.checkpoint_dir_path, "checkpoint.model.pt")
-        torch.save({
-            "model_state_dict": self.model_state,
-        }, checkpoint_file)
+        with open(checkpoint_file, "wb") as f:
+            torch.save({
+                "model_state_dict": self.model_state,
+            }, checkpoint_file)
+            f.flush()
+            os.fsync(f)
 
         checkpoint_file = os.path.join(self.checkpoint_dir_path, "checkpoint.optimizer.pt")
-        torch.save({
-            "optimizer_state_dict": self.optimizer_state,
-        }, checkpoint_file)
+        with open(checkpoint_file, "wb") as f:
+            torch.save({
+                "optimizer_state_dict": self.optimizer_state,
+            }, f)
+            f.flush()
+            os.fsync(f)
 
 
 class SaveProcessWatcher(threading.Thread):
