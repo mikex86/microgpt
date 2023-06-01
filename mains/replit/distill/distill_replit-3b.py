@@ -115,10 +115,12 @@ def main():
         device=device,
         dtype=torch.bfloat16,
 
-        evaluation_period=100,
-        num_evaluation_steps=6,
+        evaluation_period=1000,
+        num_evaluation_steps=64,
 
         checkpoint_dir_path="checkpoints/replit-distill-1b",
+
+        s3_upload_folder=f"/mikex86-model-checkpoints/replit-distill-1b",
 
         hyper_save_memory=False
     )

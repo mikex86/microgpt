@@ -7,6 +7,7 @@ import os
 import json
 from typing import Optional, Callable
 
+import s3fs
 import torch
 from torch.nn import Module, Parameter
 from torch.optim import Optimizer
@@ -74,26 +75,71 @@ class SaveProcess(multiprocessing.Process):
 
 class SaveProcessWatcher(threading.Thread):
 
-    def __init__(self, save_id: any, checkpoint_dir_path: str, process: SaveProcess,
+    def __init__(self, save_id: any, checkpoint_dir_path: str,
+                 save_process: SaveProcess, upload_process: Optional[multiprocessing.Process],
                  on_save_complete: Callable[[], None]):
         super().__init__()
         self.save_id = save_id
         self.checkpoint_dir_path = checkpoint_dir_path
-        self.process = process
+        self.save_process = save_process
+        self.upload_process = upload_process
         self.on_save_complete = on_save_complete
 
     def run(self):
         start_time = time.time()
-        self.process.start()
-        self.process.join()
+        self.save_process.start()
+        if self.upload_process is not None:
+            self.upload_process.start()
+        self.save_process.join()
         end_time = time.time()
-
         self.on_save_complete()
+
+        if self.upload_process is not None:
+            logging.log_waiting_for_upload(self.save_id, self.checkpoint_dir_path)
+            self.upload_process.join()
+
         logging.log_async_save_end(self.save_id, self.checkpoint_dir_path, end_time - start_time)
 
 
+class CheckpointUploaderProcess(multiprocessing.Process):
+
+    def __init__(self, s3_upload_folder: str, model_state_dict, optimizer_state_dict, checkpoint_info_dict):
+        super().__init__()
+        self.s3_upload_folder = s3_upload_folder
+        self.model_state_dict = model_state_dict
+        self.optimizer_state_dict = optimizer_state_dict
+        self.checkpoint_info_dict = checkpoint_info_dict
+
+        if 'AWS_ACCESS_KEY_ID' in os.environ:
+            self.s3 = s3fs.S3FileSystem(key=os.environ['AWS_ACCESS_KEY_ID'], secret=os.environ['AWS_SECRET_ACCESS_KEY'])
+        else:
+            self.s3 = s3fs.S3FileSystem(anon=True)
+
+    def run(self):
+        s3_checkpoint_dir = os.path.join(self.s3_upload_folder, f"step_{self.checkpoint_info_dict['step']}")
+        os.makedirs(s3_checkpoint_dir, exist_ok=False)
+
+        checkpoint_info_file_path = os.path.join(s3_checkpoint_dir, "checkpoint_info.json")
+        with self.s3.open(checkpoint_info_file_path, "w") as f:
+            json.dump(self.checkpoint_info_dict, f)
+
+        checkpoint_file = os.path.join(s3_checkpoint_dir, "checkpoint.model.pt")
+        with self.s3.open(checkpoint_file, "wb") as f:
+            torch.save({
+                "model_state_dict": self.model_state_dict,
+            }, f)
+            f.flush()
+
+        checkpoint_file = os.path.join(s3_checkpoint_dir, "checkpoint.optimizer.pt")
+        with self.s3.open(checkpoint_file, "wb") as f:
+            torch.save({
+                "optimizer_state_dict": self.optimizer_state_dict,
+            }, f)
+            f.flush()
+
+
 def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: str, checkpoint_info: CheckpointInfo,
-                     on_save_complete: Callable[[], None]):
+                     s3_upload_folder: Optional[str], on_save_complete: Callable[[], None]):
     model_state_dict = model.state_dict()
     optimizer_state_dict = optimizer.state_dict()  # make a copy of the optimizer state
 
@@ -128,7 +174,13 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
 
     save_process = SaveProcess(save_id, checkpoint_dir_path, checkpoint_info.__dict__, copy_model_state,
                                copy_optimizer_state)
-    save_process_watcher = SaveProcessWatcher(save_id, checkpoint_dir_path, save_process, on_save_complete)
+    if s3_upload_folder is not None:
+        upload_process = CheckpointUploaderProcess(s3_upload_folder, copy_model_state, copy_optimizer_state,
+                                                   checkpoint_info)
+    else:
+        upload_process = None
+    save_process_watcher = SaveProcessWatcher(save_id, checkpoint_dir_path, save_process, upload_process,
+                                              on_save_complete)
     save_process_watcher.start()
 
     logging.log_async_save_start(save_id, checkpoint_dir_path)
@@ -137,8 +189,10 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
 
 
 def save_checkpoint_async(model: Module, optimizer: Optimizer, checkpoint_dir_path: str, checkpoint_name: str,
-                          checkpoint_info: CheckpointInfo, on_save_complete: Callable[[], None]):
+                          checkpoint_info: CheckpointInfo, s3_upload_folder: Optional[str],
+                          on_save_complete: Callable[[], None]):
     _save_checkpoint(model, optimizer, os.path.join(checkpoint_dir_path, checkpoint_name), checkpoint_info,
+                     s3_upload_folder,
                      on_save_complete)
 
 

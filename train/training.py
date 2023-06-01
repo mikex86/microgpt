@@ -59,6 +59,9 @@ class TrainingConfig:
     # Mini-step listener. (step, mini_step, ce_loss, kl_loss: optional, x, y, logits)
     mini_step_listener: Callable[[int, int, float, float, torch.tensor, torch.tensor, torch.tensor], None] = None
 
+    # When set, uploads checkpoints to S3 to the given folder key
+    s3_upload_folder: Optional[str] = None
+
     """
     Whether to delete loss and dependent tensors between mini steps.
     Empties the cuda cache if device is cuda.
@@ -381,7 +384,8 @@ class LanguageModelTrainer:
 
         checkpointing.save_checkpoint_async(self.model, self.optimizer,
                                             self.training_config.checkpoint_dir_path, "latest",
-                                            current_info, on_save_complete=on_save_complete)
+                                            current_info, self.training_config.s3_upload_folder,
+                                            on_save_complete=on_save_complete)
 
         end_time = time.time()
         logging.log_save_checkpoint(current_info, end_time - start_time)

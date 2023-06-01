@@ -125,3 +125,11 @@ def log_async_save_end(save_id, checkpoint_dir_path: str, saving_time_seconds: f
     if LOG_TO_WANDB:
         wandb.alert(title="Async save end",
                     text=f"Finished async save {save_id} to {checkpoint_dir_path} in {saving_time_seconds:.3f}s.")
+
+
+def log_waiting_for_upload(save_id, checkpoint_dir_path: str):
+    __init_wandb()
+    print(f"Waiting for async save {save_id} to {checkpoint_dir_path} to upload...")
+    if LOG_TO_WANDB:
+        wandb.alert(title="Waiting for upload",
+                    text=f"Waiting for async save {save_id} to {checkpoint_dir_path} to upload...")

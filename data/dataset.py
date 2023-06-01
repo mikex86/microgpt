@@ -115,7 +115,10 @@ class S3FolderDataset(Dataset):
         self.token_dtype = token_dtype
 
     def __iter__(self):
-        s3 = s3fs.S3FileSystem(anon=True)
+        if 'AWS_ACCESS_KEY_ID' in os.environ:
+            s3 = s3fs.S3FileSystem(key=os.environ['AWS_ACCESS_KEY_ID'], secret=os.environ['AWS_SECRET_ACCESS_KEY'])
+        else:
+            s3 = s3fs.S3FileSystem(anon=True)
 
         files = []
         file_sizes = []
