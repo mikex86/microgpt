@@ -329,9 +329,9 @@ class LanguageModelTrainer:
                 teacher_logits = self.training_config.src_model(x)
                 student_logits = self.model(x)
                 loss = torch.nn.functional.kl_div(
-                    torch.nn.functional.log_softmax(student_logits, dim=-1),
-                    torch.nn.functional.softmax(teacher_logits, dim=-1),
-                    reduction="batchmean"
+                    student_logits.view(-1, student_logits.size(-1)).log_softmax(dim=-1),
+                    teacher_logits.view(-1, teacher_logits.size(-1)).softmax(dim=-1),
+                    reduction='batchmean'
                 )
                 total_loss += loss
         return total_loss / self.training_config.num_evaluation_steps
