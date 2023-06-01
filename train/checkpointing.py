@@ -1,5 +1,6 @@
 import copy
 import multiprocessing
+import threading
 import time
 from dataclasses import dataclass
 import os
@@ -64,6 +65,18 @@ class SaveProcess(multiprocessing.Process):
             "optimizer_state_dict": self.optimizer_state,
         }, checkpoint_file)
 
+
+class SaveProcessWatcher(threading.Thread):
+
+    def __init__(self, save_id, checkpoint_dir_path, process: SaveProcess):
+        super().__init__()
+        self.save_id = save_id
+        self.checkpoint_dir_path = checkpoint_dir_path
+        self.process = process
+
+    def run(self):
+        self.process.join()
+        del running_save_processes[self.process.save_id]
         logging.log_async_save_end(self.save_id, self.checkpoint_dir_path)
 
 
@@ -96,8 +109,12 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
         del running_save_processes[checkpoint_dir_path]
 
     save_id = hash(time.time())
+
     save_process = SaveProcess(save_id, checkpoint_dir_path, checkpoint_info, copy_model_state, copy_optimizer_state)
+    save_process_watcher = SaveProcessWatcher(save_id, checkpoint_dir_path, save_process)
     save_process.start()
+    save_process_watcher.start()
+
     logging.log_async_save_start(save_id, checkpoint_dir_path)
 
     running_save_processes[checkpoint_dir_path] = save_process
