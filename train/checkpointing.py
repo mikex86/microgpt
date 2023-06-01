@@ -44,9 +44,17 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
     device = next(model.parameters()).device  # hack to get the device of the model
 
     if device.type == 'cuda':
-        copy_model_state = {k: v.cpu() for k, v in model_state_dict.items()}
-        copy_optimizer_state = {k: v.cpu() for k, v in optimizer_state_dict.items()}
+        # copy state dict to cpu via .to(cpu)
+        copy_model_state = {}
+        for k, v in model_state_dict.items():
+            if isinstance(v, Parameter) or isinstance(v, torch.Tensor):
+                copy_model_state[k] = v.cpu()
+        copy_optimizer_state = {}
+        for k, v in optimizer_state_dict.items():
+            if isinstance(v, Parameter) or isinstance(v, torch.Tensor):
+                copy_optimizer_state[k] = v.cpu()
     else:
+        # deepcopy on cpu
         copy_model_state = copy.deepcopy(model_state_dict)
         copy_optimizer_state = copy.deepcopy(optimizer_state_dict)
 
