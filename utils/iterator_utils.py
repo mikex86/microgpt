@@ -54,10 +54,11 @@ def prefetching_iterator(dataset_iterator: iter, num_prefetch: int):
             self.done = False
             self.dataset_iterator = dataset_iterator
 
-        def __enter__(self):
             self.thread = threading.Thread(target=self.prefetch)
             self.thread.daemon = True
             self.thread.start()
+
+        def __enter__(self):
             return self
 
         def __exit__(self, exc_type, exc_val, exc_tb):
