@@ -176,7 +176,7 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
                                copy_optimizer_state)
     if s3_upload_folder is not None:
         upload_process = CheckpointUploaderProcess(s3_upload_folder, copy_model_state, copy_optimizer_state,
-                                                   checkpoint_info)
+                                                   checkpoint_info.__dict__)
     else:
         upload_process = None
     save_process_watcher = SaveProcessWatcher(save_id, checkpoint_dir_path, save_process, upload_process,
