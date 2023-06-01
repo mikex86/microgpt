@@ -267,6 +267,7 @@ class LanguageModelTrainer:
                     # log data from the current step
                     log_data = {
                         "loss/train": total_loss / self.training_config.n_mini_steps,
+                        "lr": lr
                     }
                     logging.log_train_step(self.current_step, step_ms, log_data)
 
