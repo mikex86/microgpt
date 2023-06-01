@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - 'build-docker'
-    branches:
-      - master
 
 jobs:
   build-replit-distill:
