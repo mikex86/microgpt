@@ -336,7 +336,7 @@ class LanguageModelTrainer:
                 total_loss += loss
         return total_loss / self.training_config.num_evaluation_steps
 
-    def save_checkpoint(self, step: int, eval_loss: float, teacher_eval_loss: Optional[float] = None):
+    def save_checkpoint(self, step: int, eval_loss: float, teacher_eval_loss: Optional[float]):
         """
         Performs checkpoint saving for the model.
         Saves the latest checkpoint and the best checkpoint (based on the validation loss)

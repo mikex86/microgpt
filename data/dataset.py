@@ -132,6 +132,7 @@ class S3FolderDataset(Dataset):
             rx_queue_ = multiprocessing.Queue()
             tx_queue_ = multiprocessing.Queue()
             proc = S3AsyncReader(files_for_proc, file_sizes, self.token_dtype, self.seq_len, rx_queue_, tx_queue_)
+            proc.daemon = True
             proc.start()
             for f in files_for_proc:
                 proc_for_file[f] = proc

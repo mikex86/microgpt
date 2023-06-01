@@ -19,7 +19,7 @@ from utils import torchhacks
 class CheckpointInfo:
     val_loss: float
     step: int
-    teacher_eval_loss: Optional[float] = None
+    teacher_eval_loss: Optional[float]
 
 
 def _get_checkpoint_info(checkpoint_path: str) -> Optional[CheckpointInfo]:
@@ -53,7 +53,7 @@ class SaveProcess(multiprocessing.Process):
         os.makedirs(self.checkpoint_dir_path, exist_ok=True)
         checkpoint_info_file_path = os.path.join(self.checkpoint_dir_path, "checkpoint_info.json")
         with open(checkpoint_info_file_path, "w") as f:
-            json.dump(self.checkpoint_info.__dict__, f)
+            json.dump(self.checkpoint_info, f)
 
         checkpoint_file = os.path.join(self.checkpoint_dir_path, "checkpoint.model.pt")
         with open(checkpoint_file, "wb") as f:
@@ -126,7 +126,8 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
 
     save_id = hash(time.time())
 
-    save_process = SaveProcess(save_id, checkpoint_dir_path, checkpoint_info, copy_model_state, copy_optimizer_state)
+    save_process = SaveProcess(save_id, checkpoint_dir_path, checkpoint_info.__dict__, copy_model_state,
+                               copy_optimizer_state)
     save_process_watcher = SaveProcessWatcher(save_id, checkpoint_dir_path, save_process, on_save_complete)
     save_process_watcher.start()
 
