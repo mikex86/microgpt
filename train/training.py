@@ -273,12 +273,21 @@ class LanguageModelTrainer:
 
                     if self.current_step % self.training_config.evaluation_period == 0:
                         # evaluate model
-                        eval_loss = self.perform_evaluation()
+                        eval_loss = self.perform_evaluation_on_targets()
+
+                        if self.training_config.src_model is not None:
+                            teacher_eval_loss = self.perform_evaluation_on_logits()
+                        else:
+                            teacher_eval_loss = None
 
                         # log evaluation data
                         log_data = {
                             "loss/val": eval_loss
                         }
+
+                        if teacher_eval_loss is not None:
+                            log_data["loss/teacher_val"] = teacher_eval_loss
+
                         logging.log_eval_step(self.current_step, log_data)
 
                         # save checkpoint
@@ -291,7 +300,7 @@ class LanguageModelTrainer:
             raise e
 
     @torch.no_grad()
-    def perform_evaluation(self) -> float:
+    def perform_evaluation_on_targets(self) -> float:
         """
         Performs evaluation of the model and returns the evaluation loss
         """
@@ -303,6 +312,28 @@ class LanguageModelTrainer:
                 loss = self.model.get_eval_loss(x, y)
                 total_loss += loss
 
+        return total_loss / self.training_config.num_evaluation_steps
+
+    @torch.no_grad()
+    def perform_evaluation_on_logits(self) -> float:
+        """
+        Performs evaluation of the model and returns the evaluation loss.
+        Can only be used if a source model is provided for destillation.
+        """
+        if self.training_config.src_model is None:
+            raise ValueError("Source model is required for evaluation on logits")
+        total_loss = 0
+        for i in range(self.training_config.num_evaluation_steps):
+            x, y = next(self.val_it)
+            with self.autocast_ctx:
+                teacher_logits = self.training_config.src_model(x)
+                student_logits = self.model(x)
+                loss = torch.nn.functional.kl_div(
+                    torch.nn.functional.log_softmax(student_logits, dim=-1),
+                    torch.nn.functional.softmax(teacher_logits, dim=-1),
+                    reduction="batchmean"
+                )
+                total_loss += loss
         return total_loss / self.training_config.num_evaluation_steps
 
     def save_checkpoint(self, step: int, eval_loss: float):
