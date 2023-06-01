@@ -367,7 +367,8 @@ class LanguageModelTrainer:
                 shutil.copytree(os.path.join(self.training_config.checkpoint_dir_path, "latest"),
                                 os.path.join(self.training_config.checkpoint_dir_path, "best"))
 
-            if best_info is None or teacher_eval_loss < best_info.teacher_eval_loss:
+            if best_info is None or best_info.teacher_eval_loss is None \
+                    or teacher_eval_loss < best_info.teacher_eval_loss:
                 # copy "latest" checkpoint as "best-on-teacher" checkpoint
                 # delete old "best-on-teacher" checkpoint if it exists
                 if os.path.exists(os.path.join(self.training_config.checkpoint_dir_path, "best-on-teacher")):
