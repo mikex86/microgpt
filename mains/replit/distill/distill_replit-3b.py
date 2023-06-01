@@ -116,7 +116,7 @@ def main():
         dtype=torch.bfloat16,
 
         evaluation_period=1000,
-        num_evaluation_steps=16,
+        num_evaluation_steps=8,
 
         checkpoint_dir_path="checkpoints/replit-distill-1b",
 
