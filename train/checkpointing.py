@@ -117,7 +117,7 @@ class CheckpointUploaderProcess(multiprocessing.Process):
 
     def run(self):
         s3_checkpoint_dir = os.path.join(self.s3_upload_folder, f"step_{self.checkpoint_info_dict['step']}")
-        os.makedirs(s3_checkpoint_dir, exist_ok=False)
+        os.makedirs(s3_checkpoint_dir, exist_ok=True)
 
         checkpoint_info_file_path = os.path.join(s3_checkpoint_dir, "checkpoint_info.json")
         with self.s3.open(checkpoint_info_file_path, "w") as f:
