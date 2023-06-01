@@ -119,9 +119,9 @@ def log_async_save_start(save_id, checkpoint_dir_path: str):
                     text=f"Starting async save {save_id} to {checkpoint_dir_path}...")
 
 
-def log_async_save_end(save_id, checkpoint_dir_path: str):
+def log_async_save_end(save_id, checkpoint_dir_path: str, saving_time_seconds: float):
     __init_wandb()
-    print(f"Finished async save {save_id} to {checkpoint_dir_path}.")
+    print(f"Finished async save {save_id} to {checkpoint_dir_path} in {saving_time_seconds:.3f}s.")
     if LOG_TO_WANDB:
         wandb.alert(title="Async save end",
-                    text=f"Finished async save {save_id} to {checkpoint_dir_path}.")
+                    text=f"Finished async save {save_id} to {checkpoint_dir_path} in {saving_time_seconds:.3f}s.")

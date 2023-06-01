@@ -75,8 +75,11 @@ class SaveProcessWatcher(threading.Thread):
         self.process = process
 
     def run(self):
+        start_time = time.time()
+        self.process.start()
         self.process.join()
-        logging.log_async_save_end(self.save_id, self.checkpoint_dir_path)
+        end_time = time.time()
+        logging.log_async_save_end(self.save_id, self.checkpoint_dir_path, end_time - start_time)
 
 
 def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: str, checkpoint_info: CheckpointInfo):
@@ -114,7 +117,6 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
 
     save_process = SaveProcess(save_id, checkpoint_dir_path, checkpoint_info, copy_model_state, copy_optimizer_state)
     save_process_watcher = SaveProcessWatcher(save_id, checkpoint_dir_path, save_process)
-    save_process.start()
     save_process_watcher.start()
 
     logging.log_async_save_start(save_id, checkpoint_dir_path)
