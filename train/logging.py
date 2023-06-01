@@ -62,6 +62,7 @@ def log_eval_step(step: int, data_dict: dict):
 
 
 def log_save_checkpoint(checkpoint_info: 'CheckpointInfo', saving_time_seconds: float):
+    __init_wandb()
     if LOG_TO_CONSOLE:
         print(
             f"Saved checkpoint at step {checkpoint_info.step}"
@@ -70,14 +71,24 @@ def log_save_checkpoint(checkpoint_info: 'CheckpointInfo', saving_time_seconds: 
 
 
 def log_loss_nan(current_step: int):
+    __init_wandb()
     print(f"WARNING: Loss is NaN at step {current_step}. Attempting to recover...")
+
+    if LOG_TO_WANDB:
+        wandb.alert(title="Loss is NaN", text=f"Loss is NaN at step {current_step}!")
 
 
 def log_tried_save_nan_checkpoint(current_step: int):
+    __init_wandb()
     print(f"WARNING: Tried to save checkpoint with NaN loss at step {current_step}!")
+
+    if LOG_TO_WANDB:
+        wandb.alert(title="Tried to save NaN checkpoint",
+                    text=f"Tried to save checkpoint with NaN loss at step {current_step}!")
 
 
 def log_error(e: BaseException):
+    __init_wandb()
     print(f"ERROR: {e}")
     traceback.print_exc()
     if LOG_TO_WANDB:
@@ -85,12 +96,14 @@ def log_error(e: BaseException):
 
 
 def log_oom(step: int):
+    __init_wandb()
     print(f"ERROR: Out of memory at step {step}!")
     if LOG_TO_WANDB:
         wandb.alert(title="Out of memory", text=f"Out of memory at step {step}!")
 
 
 def log_blocking_save(checkpoint_dir_path: str):
+    __init_wandb()
     print(
         f"WARNING: Blocking save of checkpoint to {checkpoint_dir_path}! Previous checkpoint hasn't finished saving yet!")
     if LOG_TO_WANDB:
@@ -99,6 +112,7 @@ def log_blocking_save(checkpoint_dir_path: str):
 
 
 def log_async_save_start(save_id, checkpoint_dir_path: str):
+    __init_wandb()
     print(f"Starting async save {save_id} to {checkpoint_dir_path}...")
     if LOG_TO_WANDB:
         wandb.alert(title="Async save start",
@@ -106,6 +120,7 @@ def log_async_save_start(save_id, checkpoint_dir_path: str):
 
 
 def log_async_save_end(save_id, checkpoint_dir_path: str):
+    __init_wandb()
     print(f"Finished async save {save_id} to {checkpoint_dir_path}.")
     if LOG_TO_WANDB:
         wandb.alert(title="Async save end",
