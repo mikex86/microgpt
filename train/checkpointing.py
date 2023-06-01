@@ -116,8 +116,7 @@ class CheckpointUploaderProcess(multiprocessing.Process):
             self.s3 = s3fs.S3FileSystem(anon=True)
 
     def run(self):
-        s3_checkpoint_dir = f"{self.s3_upload_folder}/step_{self.checkpoint_info_dict['step']}"
-        os.makedirs(s3_checkpoint_dir, exist_ok=True)
+        s3_checkpoint_dir = f"{self.s3_upload_folder}/step-{self.checkpoint_info_dict['step']}"
 
         checkpoint_info_file_path = f"{s3_checkpoint_dir}/checkpoint_info.json"
         self.s3.touch(checkpoint_info_file_path, create_parents=True)
