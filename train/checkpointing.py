@@ -89,12 +89,16 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
         # copy state dict to cpu via .to(cpu)
         copy_model_state = {}
         for k, v in model_state_dict.items():
-            if isinstance(v, Parameter) or isinstance(v, torch.Tensor):
-                copy_model_state[k] = v.cpu()
+            if hasattr(v, 'to') and hasattr(v, 'cpu'):
+                copy_model_state[k] = v.to('cpu')
+            else:
+                copy_model_state[k] = v
         copy_optimizer_state = {}
         for k, v in optimizer_state_dict.items():
-            if isinstance(v, Parameter) or isinstance(v, torch.Tensor):
-                copy_optimizer_state[k] = v.cpu()
+            if hasattr(v, 'to') and hasattr(v, 'cpu'):
+                copy_optimizer_state[k] = v.to('cpu')
+            else:
+                copy_optimizer_state[k] = v
     else:
         # deepcopy on cpu
         copy_model_state = copy.deepcopy(model_state_dict)
@@ -105,7 +109,6 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
         if running_save_processes[checkpoint_dir_path].is_alive():
             logging.log_blocking_save(checkpoint_dir_path)
         running_save_processes[checkpoint_dir_path].join()
-        del running_save_processes[checkpoint_dir_path]
 
     save_id = hash(time.time())
 
