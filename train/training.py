@@ -292,7 +292,7 @@ class LanguageModelTrainer:
 
                         # save checkpoint
                         if self.current_step > 0:
-                            self.save_checkpoint(self.current_step, eval_loss)
+                            self.save_checkpoint(self.current_step, eval_loss, teacher_eval_loss)
 
                     self.current_step += 1
         except BaseException as e:
@@ -318,7 +318,7 @@ class LanguageModelTrainer:
     def perform_evaluation_on_logits(self) -> float:
         """
         Performs evaluation of the model and returns the evaluation loss.
-        Can only be used if a source model is provided for destillation.
+        Can only be used if a source model is provided for distillation.
         """
         if self.training_config.src_model is None:
             raise ValueError("Source model is required for evaluation on logits")
@@ -336,41 +336,51 @@ class LanguageModelTrainer:
                 total_loss += loss
         return total_loss / self.training_config.num_evaluation_steps
 
-    def save_checkpoint(self, step: int, eval_loss: float):
+    def save_checkpoint(self, step: int, eval_loss: float, teacher_eval_loss: Optional[float] = None):
         """
         Performs checkpoint saving for the model.
         Saves the latest checkpoint and the best checkpoint (based on the validation loss)
         :param step: the current step of training
-        :param eval_loss: the loss scored during evaluation. Used to determine if the current checkpoint is the best
+        :param eval_loss: the loss scored during evaluation. Used to determine if the current checkpoint is the best.
+        :param teacher_eval_loss: the loss scored during evaluation on teacher logits.
+        Present only if a source model is provided for distillation.
         """
         if math.isnan(eval_loss):
             logging.log_tried_save_nan_checkpoint(step)
             return
 
         best_info = checkpointing.get_checkpoint_info(self.training_config.checkpoint_dir_path, "best")
-        current_info = CheckpointInfo(step=step, val_loss=eval_loss)
+        current_info = CheckpointInfo(step=step, val_loss=eval_loss, teacher_eval_loss=teacher_eval_loss)
 
         # save latest checkpoint
         start_time = time.time()
-        checkpointing.save_checkpoint(self.model, self.optimizer,
-                                      self.training_config.checkpoint_dir_path, "latest",
-                                      current_info)
 
-        if best_info is not None and best_info.val_loss < eval_loss:
-            end_time = time.time()
-            logging.log_save_checkpoint(current_info, end_time - start_time)
-            return
+        def on_save_complete():
+            if best_info is None or eval_loss < best_info.val_loss:
+                # copy "latest" checkpoint as "best" checkpoint
+                # delete old "best" checkpoint if it exists
+                if os.path.exists(os.path.join(self.training_config.checkpoint_dir_path, "best")):
+                    # recursively delete the "best" checkpoint
+                    shutil.rmtree(os.path.join(self.training_config.checkpoint_dir_path, "best"))
 
-        # copy "latest" checkpoint as "best" checkpoint
+                # make a copy of the "latest" checkpoint as new "best" checkpoint
+                shutil.copytree(os.path.join(self.training_config.checkpoint_dir_path, "latest"),
+                                os.path.join(self.training_config.checkpoint_dir_path, "best"))
 
-        # delete old "best" checkpoint if it exists
-        if os.path.exists(os.path.join(self.training_config.checkpoint_dir_path, "best")):
-            # recursively delete the "best" checkpoint
-            shutil.rmtree(os.path.join(self.training_config.checkpoint_dir_path, "best"))
+            if best_info is None or teacher_eval_loss < best_info.teacher_eval_loss:
+                # copy "latest" checkpoint as "best-on-teacher" checkpoint
+                # delete old "best-on-teacher" checkpoint if it exists
+                if os.path.exists(os.path.join(self.training_config.checkpoint_dir_path, "best-on-teacher")):
+                    # recursively delete the "best-on-teacher" checkpoint
+                    shutil.rmtree(os.path.join(self.training_config.checkpoint_dir_path, "best-on-teacher"))
 
-        # make a copy of the "latest" checkpoint as new "best" checkpoint
-        shutil.copytree(os.path.join(self.training_config.checkpoint_dir_path, "latest"),
-                        os.path.join(self.training_config.checkpoint_dir_path, "best"))
+                # make a copy of the "latest" checkpoint as new "best-on-teacher" checkpoint
+                shutil.copytree(os.path.join(self.training_config.checkpoint_dir_path, "latest"),
+                                os.path.join(self.training_config.checkpoint_dir_path, "best-on-teacher"))
+
+        checkpointing.save_checkpoint_async(self.model, self.optimizer,
+                                            self.training_config.checkpoint_dir_path, "latest",
+                                            current_info, on_save_complete=on_save_complete)
 
         end_time = time.time()
         logging.log_save_checkpoint(current_info, end_time - start_time)

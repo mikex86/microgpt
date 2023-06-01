@@ -5,14 +5,13 @@ import time
 from dataclasses import dataclass
 import os
 import json
-from typing import Optional
+from typing import Optional, Callable
 
 import torch
 from torch.nn import Module, Parameter
 from torch.optim import Optimizer
 
 from train import logging
-from train.logging import log_save_checkpoint
 from utils import torchhacks
 
 
@@ -20,6 +19,7 @@ from utils import torchhacks
 class CheckpointInfo:
     val_loss: float
     step: int
+    teacher_eval_loss: Optional[float] = None
 
 
 def _get_checkpoint_info(checkpoint_path: str) -> Optional[CheckpointInfo]:
@@ -74,21 +74,26 @@ class SaveProcess(multiprocessing.Process):
 
 class SaveProcessWatcher(threading.Thread):
 
-    def __init__(self, save_id, checkpoint_dir_path, process: SaveProcess):
+    def __init__(self, save_id: any, checkpoint_dir_path: str, process: SaveProcess,
+                 on_save_complete: Callable[[], None]):
         super().__init__()
         self.save_id = save_id
         self.checkpoint_dir_path = checkpoint_dir_path
         self.process = process
+        self.on_save_complete = on_save_complete
 
     def run(self):
         start_time = time.time()
         self.process.start()
         self.process.join()
         end_time = time.time()
+
+        self.on_save_complete()
         logging.log_async_save_end(self.save_id, self.checkpoint_dir_path, end_time - start_time)
 
 
-def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: str, checkpoint_info: CheckpointInfo):
+def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: str, checkpoint_info: CheckpointInfo,
+                     on_save_complete: Callable[[], None]):
     model_state_dict = model.state_dict()
     optimizer_state_dict = optimizer.state_dict()  # make a copy of the optimizer state
 
@@ -122,7 +127,7 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
     save_id = hash(time.time())
 
     save_process = SaveProcess(save_id, checkpoint_dir_path, checkpoint_info, copy_model_state, copy_optimizer_state)
-    save_process_watcher = SaveProcessWatcher(save_id, checkpoint_dir_path, save_process)
+    save_process_watcher = SaveProcessWatcher(save_id, checkpoint_dir_path, save_process, on_save_complete)
     save_process_watcher.start()
 
     logging.log_async_save_start(save_id, checkpoint_dir_path)
@@ -130,9 +135,10 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
     running_save_processes[checkpoint_dir_path] = save_process
 
 
-def save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: str, checkpoint_name: str,
-                    checkpoint_info: CheckpointInfo):
-    _save_checkpoint(model, optimizer, os.path.join(checkpoint_dir_path, checkpoint_name), checkpoint_info)
+def save_checkpoint_async(model: Module, optimizer: Optimizer, checkpoint_dir_path: str, checkpoint_name: str,
+                          checkpoint_info: CheckpointInfo, on_save_complete: Callable[[], None]):
+    _save_checkpoint(model, optimizer, os.path.join(checkpoint_dir_path, checkpoint_name), checkpoint_info,
+                     on_save_complete)
 
 
 def _load_checkpoint(model: Module, optimizer: Optional[Optimizer], checkpoint_dir_path: str, load_lazy: bool = False):
