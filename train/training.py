@@ -286,7 +286,7 @@ class LanguageModelTrainer:
                         }
 
                         if teacher_eval_loss is not None:
-                            log_data["loss/teacher_val"] = teacher_eval_loss
+                            log_data["loss/val_on_teacher_logits"] = teacher_eval_loss
 
                         logging.log_eval_step(self.current_step, log_data)
 
