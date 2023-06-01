@@ -19,7 +19,7 @@ from utils import torchhacks
 class CheckpointInfo:
     val_loss: float
     step: int
-    teacher_eval_loss: Optional[float]
+    teacher_eval_loss: Optional[float] = None
 
 
 def _get_checkpoint_info(checkpoint_path: str) -> Optional[CheckpointInfo]:
