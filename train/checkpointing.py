@@ -119,18 +119,19 @@ class CheckpointUploaderProcess(multiprocessing.Process):
         s3_checkpoint_dir = os.path.join(self.s3_upload_folder, f"step_{self.checkpoint_info_dict['step']}")
         os.makedirs(s3_checkpoint_dir, exist_ok=True)
 
-        checkpoint_info_file_path = os.path.join(s3_checkpoint_dir, "checkpoint_info.json")
+        checkpoint_info_file_path = f"{s3_checkpoint_dir}/checkpoint_info.json"
         with self.s3.open(checkpoint_info_file_path, "w") as f:
             json.dump(self.checkpoint_info_dict, f)
+            f.flush()
 
-        checkpoint_file = os.path.join(s3_checkpoint_dir, "checkpoint.model.pt")
+        checkpoint_file = f"{s3_checkpoint_dir}/checkpoint.model.pt"
         with self.s3.open(checkpoint_file, "wb") as f:
             torch.save({
                 "model_state_dict": self.model_state_dict,
             }, f)
             f.flush()
 
-        checkpoint_file = os.path.join(s3_checkpoint_dir, "checkpoint.optimizer.pt")
+        checkpoint_file = f"{s3_checkpoint_dir}/checkpoint.optimizer.pt"
         with self.s3.open(checkpoint_file, "wb") as f:
             torch.save({
                 "optimizer_state_dict": self.optimizer_state_dict,
