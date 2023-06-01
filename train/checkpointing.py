@@ -103,17 +103,13 @@ class SaveProcessWatcher(threading.Thread):
 
 class CheckpointUploaderProcess(multiprocessing.Process):
 
-    def __init__(self, s3_upload_folder: str, model_state_dict, optimizer_state_dict, checkpoint_info_dict):
+    def __init__(self, s3, s3_upload_folder: str, model_state_dict, optimizer_state_dict, checkpoint_info_dict):
         super().__init__()
+        self.s3 = s3
         self.s3_upload_folder = s3_upload_folder
         self.model_state_dict = model_state_dict
         self.optimizer_state_dict = optimizer_state_dict
         self.checkpoint_info_dict = checkpoint_info_dict
-
-        if 'AWS_ACCESS_KEY_ID' in os.environ:
-            self.s3 = s3fs.S3FileSystem(key=os.environ['AWS_ACCESS_KEY_ID'], secret=os.environ['AWS_SECRET_ACCESS_KEY'])
-        else:
-            self.s3 = s3fs.S3FileSystem(anon=True)
 
     def run(self):
         s3_checkpoint_dir = f"{self.s3_upload_folder}/step-{self.checkpoint_info_dict['step']}"
@@ -178,7 +174,11 @@ def _save_checkpoint(model: Module, optimizer: Optimizer, checkpoint_dir_path: s
     save_process = SaveProcess(save_id, checkpoint_dir_path, checkpoint_info.__dict__, copy_model_state,
                                copy_optimizer_state)
     if s3_upload_folder is not None:
-        upload_process = CheckpointUploaderProcess(s3_upload_folder, copy_model_state, copy_optimizer_state,
+        if 'AWS_ACCESS_KEY_ID' in os.environ:
+            s3 = s3fs.S3FileSystem(key=os.environ['AWS_ACCESS_KEY_ID'], secret=os.environ['AWS_SECRET_ACCESS_KEY'])
+        else:
+            s3 = s3fs.S3FileSystem(anon=True)
+        upload_process = CheckpointUploaderProcess(s3, s3_upload_folder, copy_model_state, copy_optimizer_state,
                                                    checkpoint_info.__dict__)
     else:
         upload_process = None
