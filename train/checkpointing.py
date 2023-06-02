@@ -91,13 +91,13 @@ class SaveProcessWatcher(threading.Thread):
         if self.upload_process is not None:
             self.upload_process.start()
         self.save_process.join()
-        end_time = time.time()
         self.on_save_complete()
 
         if self.upload_process is not None:
             logging.log_waiting_for_upload(self.save_id, self.checkpoint_dir_path)
             self.upload_process.join()
 
+        end_time = time.time()
         logging.log_async_save_end(self.save_id, self.checkpoint_dir_path, end_time - start_time)
 
 
