@@ -120,7 +120,7 @@ def main():
 
         checkpoint_dir_path="checkpoints/replit-distill-1b",
 
-        s3_upload_folder="mikex86-model-checkpoints/replit-distill-1b",
+        s3_upload_folder="microgpt-datasets-us/checkpoints/replit-distill-1b",
 
         hyper_save_memory=False
     )
