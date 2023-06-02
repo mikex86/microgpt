@@ -102,8 +102,8 @@ def main():
         batch_size=10,
         n_mini_steps=1,
 
-        min_learning_rate=1e-9,
-        max_learning_rate=1e-6,
+        min_learning_rate=1e-8,
+        max_learning_rate=1e-5,
         warmup_steps=5000,
         max_steps=6000000,
 
