@@ -11,9 +11,9 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     config = ReplitLMConfig(
-        d_model=2560,
-        n_heads=32,
-        n_layers=32,
+        d_model=1536,
+        n_heads=12,
+        n_layers=12,
         mlp_ratio=4,
         max_seq_len=2048,
         vocab_size=32768,
@@ -23,22 +23,22 @@ def main():
         alibi_bias_max=8,
         use_bias=False,
         device=device,
-        dtype=torch.bfloat16
+        dtype=torch.float32
     )
 
     model = ReplitLM(config)
-    checkpointing.load_checkpoint(model, None, 'checkpoints/replit-3b', 'best')
+    checkpointing.load_checkpoint(model, None, 'checkpoints/replit-distill-1b', 'best', load_lazy=True)
 
-    tokenizer = SentencePieceTokenizer("checkpoints/replit-3b/tokenizer.model")
+    tokenizer = SentencePieceTokenizer("checkpoints/replit-distill-1b/tokenizer.model")
     sampler = AutoregressiveSampler(model, tokenizer)
 
-    prompt = "class GPT2(torch.nn.Module):\n"
+    prompt = "class Gpt2(torch.nn.Module):\n"
 
     sampler.stream_text(
         prompt,
         1000,
         lambda token_str: print(token_str, end=''),
-        temperature=0.7
+        temperature=0.0
     )
 
 

@@ -7,10 +7,11 @@ from collections import Counter
 from typing import Iterator, Tuple, Callable, Optional, List
 
 import numpy as np
+import requests
 import torch
 import s3fs
 from tqdm import tqdm
-
+import smart_open
 
 class Dataset:
 
@@ -37,26 +38,49 @@ class BinaryTokenDataset(Dataset):
                          torch.from_numpy(self.array[idx + 1:idx + self.seq_len + 1].astype(np.int64)))])
 
 
-class S3FileDataset(Dataset):
-    """
-    TODO: This is untested. It might be broken.
-    """
+class BinaryTokenFolderDataset(Dataset):
 
-    def __init__(self, file_path: str, seq_len: int, token_dtype: np.dtype) -> None:
-        self.file_path = file_path
+    def __init__(self, folder_path: str, seq_len: int, token_dtype: np.dtype, is_train: bool) -> None:
+        self.folder_path = folder_path
+        self.seq_len = seq_len
+        self.token_dtype = token_dtype
+
+        self.arrays = []
+        for root, dirs, files in os.walk(folder_path):
+            for file in files:
+                if 'train' in file if is_train else 'val' in file:
+                    file = os.path.join(root, file)
+                    if os.path.getsize(file) == 0:
+                        continue
+                    self.arrays.append(np.memmap(file, mode="r", dtype=token_dtype))
+
+    def __iter__(self):
+        while True:
+            array_idx = torch.randint(low=0, high=len(self.arrays), size=(1,)).item()
+            array = self.arrays[array_idx]
+            idx = torch.randint(low=0, high=len(array) - self.seq_len - 1, size=(1,)).item()
+            yield iter([(torch.from_numpy(array[idx:idx + self.seq_len].astype(np.int64)),
+                         torch.from_numpy(array[idx + 1:idx + self.seq_len + 1].astype(np.int64)))])
+
+
+class HttpBinaryDataset(Dataset):
+
+    def __init__(self, file_url: str, seq_len: int, token_dtype: np.dtype) -> None:
+        self.file_url = file_url
         self.seq_len = seq_len
         self.token_dtype = token_dtype
 
     def __iter__(self):
-        s3 = s3fs.S3FileSystem(anon=True)
-        with s3.open(self.file_path, 'rb') as f:
-            file_size = s3.du(self.file_path)
+        dtype_size = np.dtype(self.token_dtype).itemsize
+        with smart_open.open(self.file_url, 'rb') as file:
+            file_size = int(requests.get(self.file_url, stream=True).headers['Content-length'])
             while True:
                 idx = torch.randint(low=0, high=file_size - self.seq_len - 1, size=(1,)).item()
-                f.seek(idx)
-                arr = np.frombuffer(f.read(self.seq_len), dtype=self.token_dtype)
-                yield iter([(torch.from_numpy(arr.astype(np.int64)), \
-                             torch.from_numpy(arr[1:].astype(np.int64)))])
+                idx -= idx % dtype_size
+                file.seek(idx)
+                array = np.frombuffer(file.read((self.seq_len + 1) * dtype_size), dtype=self.token_dtype)
+                yield iter([(torch.from_numpy(array[:-1].astype(np.int64)),
+                             torch.from_numpy(array[1:].astype(np.int64)))])
 
 
 class S3AsyncReader(multiprocessing.Process):

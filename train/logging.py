@@ -105,31 +105,19 @@ def log_oom(step: int):
 def log_blocking_save(checkpoint_dir_path: str):
     __init_wandb()
     print(
-        f"WARNING: Blocking save of checkpoint to {checkpoint_dir_path}! Previous checkpoint hasn't finished saving yet!")
-    if LOG_TO_WANDB:
-        wandb.alert(title="Blocking save",
-                    text=f"Blocking save of checkpoint to {checkpoint_dir_path}! Previous checkpoint hasn't finished saving yet!")
+        f"Blocking save of checkpoint to {checkpoint_dir_path}! Previous checkpoint hasn't finished saving yet!")
 
 
 def log_async_save_start(save_id, checkpoint_dir_path: str):
     __init_wandb()
     print(f"Starting async save {save_id} to {checkpoint_dir_path}...")
-    if LOG_TO_WANDB:
-        wandb.alert(title="Async save start",
-                    text=f"Starting async save {save_id} to {checkpoint_dir_path}...")
 
 
 def log_async_save_end(save_id, checkpoint_dir_path: str, saving_time_seconds: float):
     __init_wandb()
     print(f"Finished async save {save_id} to {checkpoint_dir_path} in {saving_time_seconds:.3f}s.")
-    if LOG_TO_WANDB:
-        wandb.alert(title="Async save end",
-                    text=f"Finished async save {save_id} to {checkpoint_dir_path} in {saving_time_seconds:.3f}s.")
 
 
 def log_waiting_for_upload(save_id, checkpoint_dir_path: str):
     __init_wandb()
     print(f"Waiting for async save {save_id} to {checkpoint_dir_path} to upload...")
-    if LOG_TO_WANDB:
-        wandb.alert(title="Waiting for upload",
-                    text=f"Waiting for async save {save_id} to {checkpoint_dir_path} to upload...")

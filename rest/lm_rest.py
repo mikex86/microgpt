@@ -3,7 +3,7 @@ import random
 import string
 import threading
 import time
-from queue import Queue
+from queue import Queue, Empty
 
 from flask import Flask, request, jsonify, Response
 from typing import Dict, Callable
@@ -122,7 +122,10 @@ def create_completion():
                 ).start()
 
                 while not generation_finished:
-                    text = queue.get(block=True, timeout=None)
+                    try:
+                        text = queue.get(block=True, timeout=1)
+                    except Empty:
+                        continue
                     completion_json = {
                         "id": completion_id,
                         "object": "text_completion",

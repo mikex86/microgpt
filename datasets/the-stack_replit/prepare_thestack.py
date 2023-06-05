@@ -1,7 +1,6 @@
 import json
 import multiprocessing
 import os
-import sys
 import time
 import traceback
 from dataclasses import dataclass
@@ -33,7 +32,7 @@ def list_parquet_files(repo_id: str, patterns: List[str]):
     return files_list
 
 
-TOKEN_BUFFER_SIZE = 1000
+TOKEN_BUFFER_SIZE = 10000
 
 
 def _flush_token_buffer(token_buffer, out_file):
@@ -44,7 +43,27 @@ def _flush_token_buffer(token_buffer, out_file):
     token_buffer.clear()
 
 
-s3 = s3fs.S3FileSystem(key=os.environ['AWS_ACCESS_KEY_ID'], secret=os.environ['AWS_SECRET_ACCESS_KEY'])
+class OsFs:
+    @staticmethod
+    def open(path, mode):
+        return open(path, mode)
+
+    @staticmethod
+    def exists(path):
+        return os.path.exists(path)
+
+    @staticmethod
+    def touch(path, create_parents=True):
+        if create_parents:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+        open(path, 'a').close()
+
+
+upload_to_s3 = False
+if upload_to_s3:
+    fs = s3fs.S3FileSystem(key=os.environ['AWS_ACCESS_KEY_ID'], secret=os.environ['AWS_SECRET_ACCESS_KEY'])
+else:
+    fs = OsFs()
 
 s3_bucket = 'micro-gpt-datasets-us'
 s3_prefix = 'the-stack-replit'
@@ -91,7 +110,7 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
         train_s3_key = f"{s3_bucket}/{s3_prefix}/{train_file_path}"
         val_s3_key = f"{s3_bucket}/{s3_prefix}/{val_file_path}"
 
-        if s3.exists(train_s3_key) and s3.exists(val_s3_key):
+        if fs.exists(train_s3_key) and fs.exists(val_s3_key):
             progress_queue.put(DestroyProgressBarMessage(task_id))
             return
 
@@ -106,11 +125,11 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
         train_token_buffer = []
         val_token_buffer = []
 
-        s3.touch(train_s3_key, create_parents=True)
-        s3.touch(val_s3_key, create_parents=True)
+        fs.touch(train_s3_key, create_parents=True)
+        fs.touch(val_s3_key, create_parents=True)
 
-        with s3.open(train_s3_key, "wb") as train_file:
-            with s3.open(val_s3_key, "wb") as val_file:
+        with fs.open(train_s3_key, "wb") as train_file:
+            with fs.open(val_s3_key, "wb") as val_file:
                 # start new progress bar
                 progress_queue.put(CreateProgressBarMessage(task_id, n_rows))
 
@@ -122,17 +141,19 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
                     tokens = tokenizer.encode(content, eos=True)
 
                     row_idx += 1
-                    # update progress bar
-                    progress_queue.put(SetProgressMessage(task_id, row_idx))
 
                     if goes_to_val:
                         val_token_buffer.extend(tokens)
                         if len(val_token_buffer) >= TOKEN_BUFFER_SIZE:
                             _flush_token_buffer(val_token_buffer, val_file)
+                            # update progress bar
+                            progress_queue.put(SetProgressMessage(task_id, row_idx))
                     else:
                         train_token_buffer.extend(tokens)
                         if len(train_token_buffer) >= TOKEN_BUFFER_SIZE:
                             _flush_token_buffer(train_token_buffer, train_file)
+                            # update progress bar
+                            progress_queue.put(SetProgressMessage(task_id, row_idx))
 
                 _flush_token_buffer(train_token_buffer, train_file)
                 _flush_token_buffer(val_token_buffer, val_file)
