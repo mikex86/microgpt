@@ -446,7 +446,7 @@ class MemGptModel(ISparselyWeightDecayedModule, ILanguageModel):
         return sum(losses) / len(losses)
 
     @torch.inference_mode()
-    def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], int]) -> None:
+    def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], Tuple[int, bool]]) -> None:
         self.eval()
         device = next(self.parameters()).device
         prompt = prompt.copy()
@@ -500,10 +500,13 @@ class MemGptModel(ISparselyWeightDecayedModule, ILanguageModel):
                 # get probs
                 probs = self.lm_head(h)
                 probs = probs[0, -1, :]  # (b, c)
-                chosen_token = callback(probs)
+                chosen_token, should_stop = callback(probs)
 
                 # add chosen token to prompt
                 prompt.append(chosen_token)
+
+                if should_stop:
+                    break
         self.train()
 
     def get_weight_decay_groups(self) -> WeightDecayGroups:

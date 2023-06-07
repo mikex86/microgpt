@@ -12,7 +12,7 @@ from train import checkpointing
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def _load_replit_3b() -> Tuple[ILanguageModel, Tokenizer]:
+def _load_replit_3b() -> Tuple[ILanguageModel, Tokenizer, int]:
     config = ReplitLMConfig(
         d_model=2560,
         n_heads=32,
@@ -33,7 +33,7 @@ def _load_replit_3b() -> Tuple[ILanguageModel, Tokenizer]:
     checkpointing.load_checkpoint(model, None, 'checkpoints/replit-3b', 'best', load_lazy=True)
 
     tokenizer = SentencePieceTokenizer("checkpoints/replit-3b/tokenizer.model")
-    return model, tokenizer
+    return model, tokenizer, config.max_seq_len
 
 
 lm_rest.models = {

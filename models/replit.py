@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass
-from typing import List, Callable, Optional, Dict
+from typing import List, Callable, Optional, Dict, Tuple
 
 import torch
 import torch.nn
@@ -348,7 +348,7 @@ class ReplitLM(BasicLanguageModel):
 
         return torch.nn.functional.linear(x, self.transformer.wte.weight, None)
 
-    def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.Tensor], int]) -> None:
+    def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], Tuple[int, bool]]) -> None:
         self.eval()
         device = next(self.parameters()).device
         tokens = prompt.copy()
@@ -366,7 +366,7 @@ class ReplitLM(BasicLanguageModel):
             tokens_tensor = torch.tensor(tokens, dtype=torch.long, device=device).unsqueeze(0)
             logits = self(tokens_tensor, kv_cache)
             logits = logits[0, -1, :]
-            token = callback(logits)
+            token, should_stop = callback(logits)
             tokens.append(token)
 
         # forward
@@ -380,8 +380,10 @@ class ReplitLM(BasicLanguageModel):
                 logits = self(tokens_tensor, kv_cache)
 
             logits = logits[0, -1, :]
-            token = callback(logits)
+            token, should_stop = callback(logits)
             tokens.append(token)
+            if should_stop:
+                break
         self.train()
 
     @property

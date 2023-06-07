@@ -204,7 +204,7 @@ class TerminalGptModel(ISparselyWeightDecayedModule, ILanguageModel):
         return logits
 
     @torch.inference_mode()
-    def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], int]) -> None:
+    def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], Tuple[int, bool]]) -> None:
         self.eval()
         device = next(self.parameters()).device
         tokens = prompt.copy()
@@ -214,8 +214,10 @@ class TerminalGptModel(ISparselyWeightDecayedModule, ILanguageModel):
             action_required, logits = self(tokens_tensor)
             if torch.softmax(action_required, dim=1)[0, 0] > 0.5:
                 break
-            token = callback(logits)
+            token, should_stop = callback(logits)
             tokens.append(token)
+            if should_stop:
+                break
         self.train()
 
     def get_weight_decay_groups(self) -> WeightDecayGroups:

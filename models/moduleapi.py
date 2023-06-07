@@ -69,7 +69,7 @@ class ILanguageModel(torch.nn.Module):
 
     @abstractmethod
     @torch.inference_mode()
-    def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], int]) -> None:
+    def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], Tuple[int, bool]]) -> None:
         """
         Generates a sequence of tokens from the given prompt
         :param prompt: the original prompt
@@ -98,8 +98,10 @@ class BasicLanguageModel(ILanguageModel, ABC):
             tokens_tensor = torch.tensor(tokens, dtype=torch.long, device=device).unsqueeze(0)
             logits = self(tokens_tensor)
             logits = logits[0, -1, :]
-            token = callback(logits)
+            token, should_stop = callback(logits)
             tokens.append(token)
+            if should_stop:
+                break
         self.train()
 
     def back_propagate_targets(self, x: torch.tensor, targets: torch.tensor, loss_scalar: GradScaler = None,

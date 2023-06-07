@@ -1,7 +1,7 @@
 from typing import Callable, List
 
 import pyglet
-from .terminal_provider import TerminalProvider
+from terminal_provider import TerminalProvider
 
 key_xterm_mapping = {
     pyglet.window.key.ESCAPE: '\x1b',

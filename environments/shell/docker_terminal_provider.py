@@ -10,7 +10,7 @@ if os.name == "nt":
     import win32pipe
     import pywintypes
 
-from .terminal_provider import TerminalProvider
+from terminal_provider import TerminalProvider
 from docker.models.containers import Container
 
 

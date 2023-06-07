@@ -15,7 +15,7 @@ from huggingface_hub import HfApi
 from robustdatasets.parquet_streamer import ParquetStreamer
 from tokenization.sentencepiece_tokenizer import SentencePieceTokenizer
 
-from rich.progress import Table, Progress, BarColumn, TextColumn, TimeRemainingColumn, MofNCompleteColumn, \
+from rich.progress import Table, Progress, BarColumn, TimeRemainingColumn, MofNCompleteColumn, \
     TaskProgressColumn
 from rich.panel import Panel
 from rich.live import Live
@@ -182,7 +182,7 @@ def print_err(string: str):
 def main():
     multiprocessing.set_start_method("spawn", force=True)
 
-    parquet_urls = list_parquet_files("bigcode/the-stack-dedup", patterns=["**/data-000**-of-*.parquet"])
+    parquet_urls = list_parquet_files("bigcode/the-stack-dedup", patterns=["**/data-*-of-*.parquet"])
 
     # remove languages that are not important
     parquet_urls = list(filter(lambda x: language_importance.get(x.split("/")[-2], 0) > 0, parquet_urls))

@@ -1,6 +1,7 @@
 import threading
 import time
 
+import openai
 import pyglet
 
 from docker_terminal_provider import DockerTerminalProvider
@@ -16,6 +17,9 @@ INTER_STDIN_DELAY = 0.025
 TASK = "Write a calculator console app in C that supports arbitrary expressions with +, -, *, /, parentheses and order of operations"
 
 
+openai.api_base = "http://localhost:5000/api/v1"
+openai.api_key = "sk-1234"
+
 def main():
     term_provider = DockerTerminalProvider('test_ubuntu', (TERMINAL_WIDTH, TERMINAL_HEIGHT))
     # term_provider.send_input("apt-get update && apt-get upgrade -y\r")
@@ -25,7 +29,7 @@ def main():
 
     # gpt_shell_task_executor = GptShellTaskExecutor("gpt-3.5-turbo", TASK, term_provider)
 
-    gpt_shell_task_executor = GptShellTaskExecutor("gpt-4", TASK, term_provider)
+    gpt_shell_task_executor = GptShellTaskExecutor("replit-3b", TASK, term_provider)
 
     last_action_time = time.time()
     last_stdin_time = time.time()

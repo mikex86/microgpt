@@ -318,7 +318,7 @@ class LlamaModel(ILanguageModel):
         return output.float()
 
     @torch.inference_mode()
-    def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], int]) -> None:
+    def get_probs(self, prompt: List[int], n_tokens: int, callback: Callable[[torch.tensor], Tuple[int, bool]]) -> None:
         self.eval()
         device = next(self.parameters()).device
         tokens = prompt.copy()
@@ -328,10 +328,12 @@ class LlamaModel(ILanguageModel):
         for n in range(n_tokens):
             tokens_tensor = torch.tensor(tokens[prev_pos:cur_pos], dtype=torch.long, device=device).unsqueeze(0)
             logits = self(tokens_tensor, start_pos=prev_pos)[:, -1, :]
-            token = callback(logits)
+            token, should_stop = callback(logits)
             tokens.append(token)
             prev_pos = cur_pos
             cur_pos += 1
+            if should_stop:
+                break
         self.train()
 
     def back_propagate_targets(self, x: torch.tensor, targets: torch.tensor, loss_scalar: GradScaler = None,
