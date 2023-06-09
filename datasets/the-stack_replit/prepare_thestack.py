@@ -4,15 +4,17 @@ import os
 import time
 import traceback
 from dataclasses import dataclass
+from io import BytesIO
 from queue import Empty
 from typing import List
 
 import numpy as np
+import requests
 import s3fs as s3fs
 from datasets.data_files import DataFilesList
 from huggingface_hub import HfApi
 
-from robustdatasets.parquet_streamer import ParquetStreamer
+from robustdatasets.parquet_wrappers import FileWrappingParquetIterator
 from tokenization.sentencepiece_tokenizer import SentencePieceTokenizer
 
 from rich.progress import Table, Progress, BarColumn, TimeRemainingColumn, MofNCompleteColumn, \
@@ -32,7 +34,7 @@ def list_parquet_files(repo_id: str, patterns: List[str]):
     return files_list
 
 
-TOKEN_BUFFER_SIZE = 10000
+TOKEN_BUFFER_SIZE = 100000
 
 
 def _flush_token_buffer(token_buffer, out_file):
@@ -111,16 +113,36 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
         val_s3_key = f"{s3_bucket}/{s3_prefix}/{val_file_path}"
 
         if fs.exists(train_s3_key) and fs.exists(val_s3_key):
-            progress_queue.put(DestroyProgressBarMessage(task_id))
             return
 
         tokenizer = SentencePieceTokenizer("replit_tokenizer.model")
-        streamer = ParquetStreamer(
-            parquet_url,
-            headers={'Authorization': 'Bearer ' + os.environ['HUGGINGFACE_TOKEN']},
-            observed_rows=['content']
-        )
+
+        response = requests.get(parquet_url,
+                                headers={'Authorization': 'Bearer ' + os.environ['HUGGINGFACE_TOKEN']},
+                                stream=True)
+        response.raise_for_status()
+
+        file_size = int(response.headers.get('Content-Length', 0))
+
+        download_task_id = f"{task_id}-download"
+        progress_queue.put(CreateProgressBarMessage(download_task_id, file_size))
+        try:
+            buffer = BytesIO()
+
+            for chunk in response.iter_content(chunk_size=65536):
+                buffer.write(chunk)
+
+            buffer.seek(0)
+        except BaseException as e:
+            progress_queue.put(ErrorMessage(download_task_id, e))
+            return
+        finally:
+            progress_queue.put(DestroyProgressBarMessage(download_task_id))
+
+        streamer = FileWrappingParquetIterator(buffer, observed_columns=['content'])
         n_rows = len(streamer)
+
+        progress_queue.put(CreateProgressBarMessage(task_id, n_rows))
 
         train_token_buffer = []
         val_token_buffer = []
@@ -130,9 +152,6 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
 
         with fs.open(train_s3_key, "wb") as train_file:
             with fs.open(val_s3_key, "wb") as val_file:
-                # start new progress bar
-                progress_queue.put(CreateProgressBarMessage(task_id, n_rows))
-
                 row_idx = 0
 
                 for row in streamer:
@@ -159,11 +178,11 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
                 _flush_token_buffer(val_token_buffer, val_file)
 
         print(f"Finished processing {train_file_path}")
-        progress_queue.put(DestroyProgressBarMessage(task_id))
         return train_file_path, val_file_path
     except Exception as e:
         print(f"Error processing {parquet_url}: {e}")
         progress_queue.put(ErrorMessage(task_id, e))
+    finally:
         progress_queue.put(DestroyProgressBarMessage(task_id))
 
 
@@ -190,7 +209,7 @@ def main():
     print(f"Downloading {len(parquet_urls)} parquet files")
 
     # multiprocessing
-    num_workers = multiprocessing.cpu_count() * 4
+    num_workers = multiprocessing.cpu_count()
 
     tasks = {}
 
