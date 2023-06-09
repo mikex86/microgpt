@@ -3,7 +3,6 @@ import multiprocessing
 import os
 import time
 import traceback
-from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from io import BytesIO
 from queue import Empty
@@ -22,6 +21,8 @@ from rich.progress import Table, Progress, BarColumn, TimeRemainingColumn, MofNC
     TaskProgressColumn
 from rich.panel import Panel
 from rich.live import Live
+
+from utils.multithreading_madness import ProcessPoolExecutor
 
 language_importance = json.load(open("language_importance.json", "r"))
 
@@ -258,7 +259,7 @@ def main():
         for parquet_url in parquet_urls:
             progress_queue = multiprocessing.Queue()
             progress_queues.append(progress_queue)
-            results.append(executor.submit(process_parquet_url, parquet_url, progress_queue))
+            results.append(executor.submit(process_parquet_url, (parquet_url, progress_queue)))
 
         with Live(progress_table, refresh_per_second=10):
             while True:
@@ -306,7 +307,7 @@ def main():
                             print_err('\n'.join(new_message.traceback.format()) + '\n')
 
                     # break if all tasks are done
-                    all_done = all(result.done() for result in results)
+                    all_done = all(result.is_finished for result in results)
                     if all_done:
                         break
 
