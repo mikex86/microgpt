@@ -218,7 +218,7 @@ def main():
     print(f"Downloading {len(parquet_urls)} parquet files")
 
     # multiprocessing
-    # num_workers = multiprocessing.cpu_count()
+    #num_workers = multiprocessing.cpu_count()
     num_workers = 1
 
     tasks = {}
@@ -263,54 +263,53 @@ def main():
 
         with Live(progress_table, refresh_per_second=1):
             while True:
-                time.sleep(0.05)
+                time.sleep(0.01)
                 for progress_queue in progress_queues:
                     while True:
                         try:
                             new_message = progress_queue.get(block=False)
                         except Empty:
-                            new_message = None
+                            break
 
-                        if new_message is None:
-                            # break if all tasks are done
-                            all_done = all(result.is_finished for result in results)
-                            if all_done:
-                                break
-                        else:
-                            if isinstance(new_message, CreateProgressBarMessage):
-                                task = jobs_progress.add_task(new_message.task_id, total=new_message.n_total)
-                                tasks[new_message.task_id] = task
+                        if isinstance(new_message, CreateProgressBarMessage):
+                            task = jobs_progress.add_task(new_message.task_id, total=new_message.n_total)
+                            tasks[new_message.task_id] = task
 
-                            elif isinstance(new_message, SetProgressMessage):
-                                task = tasks.get(new_message.task_id, None)
-                                if task is not None:
-                                    jobs_progress.update(task, completed=new_message.n_current_progress)
-                                else:
-                                    print_err(
-                                        f"Error: Received progress message for unknown task {new_message.task_id}")
+                        elif isinstance(new_message, SetProgressMessage):
+                            task = tasks.get(new_message.task_id, None)
+                            if task is not None:
+                                jobs_progress.update(task, completed=new_message.n_current_progress)
+                            else:
+                                print_err(
+                                    f"Error: Received progress message for unknown task {new_message.task_id}")
 
-                            elif isinstance(new_message, DestroyProgressBarMessage):
-                                overall_progress.advance(overall_task, 1)
-                                task = tasks.get(new_message.task_id, None)
-                                if task is not None:
-                                    jobs_progress.remove_task(task)
-                                    del tasks[new_message.task_id]
-                                else:
-                                    print_err(
-                                        f"Error: Received destroy message for unknown task {new_message.task_id}")
+                        elif isinstance(new_message, DestroyProgressBarMessage):
+                            overall_progress.advance(overall_task, 1)
+                            task = tasks.get(new_message.task_id, None)
+                            if task is not None:
+                                jobs_progress.remove_task(task)
+                                del tasks[new_message.task_id]
+                            else:
+                                print_err(
+                                    f"Error: Received destroy message for unknown task {new_message.task_id}")
 
-                            elif isinstance(new_message, ErrorMessage):
-                                task = tasks.get(new_message.task_id, None)
-                                if task is not None:
-                                    jobs_progress.remove_task(task)
-                                    del tasks[new_message.task_id]
-                                    print_err(f"Error from task ${new_message.task_id}: {new_message.exception}")
-                                else:
-                                    print_err(
-                                        f"Error: from unknown task {new_message.task_id}: {new_message.exception}")
+                        elif isinstance(new_message, ErrorMessage):
+                            task = tasks.get(new_message.task_id, None)
+                            if task is not None:
+                                jobs_progress.remove_task(task)
+                                del tasks[new_message.task_id]
+                                print_err(f"Error from task ${new_message.task_id}: {new_message.exception}")
+                            else:
+                                print_err(
+                                    f"Error: from unknown task {new_message.task_id}: {new_message.exception}")
 
-                                # print stacktrace
-                                print_err('\n'.join(new_message.traceback.format()) + '\n')
+                            # print stacktrace
+                            print_err('\n'.join(new_message.traceback.format()) + '\n')
+
+                    # break if all tasks are done
+                    all_done = all(result.is_finished for result in results)
+                    if all_done:
+                        break
 
 
 if __name__ == '__main__':
