@@ -34,13 +34,16 @@ class SentencePieceTokenizer(TerminatedTokenizer, BatchTokenizer):
     def encode_batch(self, texts: List[str], bos: bool = False, eos: bool = False) -> List[List[int]]:
         assert type(texts) is list
 
+        batch_tokens = self.sp_model.encode(texts)
+
         if bos:
-            for i in range(len(texts)):
-                texts[i] = self.sp_model.bos_id() + texts[i]
-        if eos:
-            for i in range(len(texts)):
-                texts[i] = texts[i] + self.sp_model.eos_id()
-        return self.sp_model.encode(texts)
+            tokens = [[self.bos_id] + t for t in batch_tokens]
+        elif eos:
+            tokens = [t + [self.eos_id] for t in batch_tokens]
+        else:
+            tokens = batch_tokens
+
+        return tokens
 
     def decode_batch(self, tokens: List[List[int]], bos: bool = False, eos: bool = False) -> List[str]:
         assert type(tokens) is list
