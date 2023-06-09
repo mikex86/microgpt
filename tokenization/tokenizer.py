@@ -21,6 +21,17 @@ class Tokenizer:
         pass
 
 
+class BatchTokenizer(Tokenizer, ABC):
+
+    @abstractmethod
+    def encode_batch(self, texts: List[str]) -> List[List[int]]:
+        pass
+
+    @abstractmethod
+    def decode_batch(self, tokens: List[List[int]]) -> List[str]:
+        pass
+
+
 class TerminatedTokenizer(Tokenizer, ABC):
 
     @property

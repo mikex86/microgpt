@@ -35,6 +35,7 @@ def list_parquet_files(repo_id: str, patterns: List[str]):
 
 
 TOKEN_BUFFER_SIZE = 100000
+TOKENIZE_BATCH_SIZE = 1024
 
 
 def _flush_token_buffer(token_buffer, out_file):
@@ -129,7 +130,7 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
         try:
             buffer = BytesIO()
 
-            for chunk in response.iter_content(chunk_size=65536):
+            for chunk in response.iter_content(chunk_size=33554432):
                 progress_queue.put(SetProgressMessage(download_task_id, buffer.tell()))
                 buffer.write(chunk)
 
@@ -155,25 +156,32 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
             with fs.open(val_s3_key, "wb") as val_file:
                 row_idx = 0
 
+                batch = []
                 for row in streamer:
-                    goes_to_val = np.random.random() < 0.01
                     content = row['content']
-                    tokens = tokenizer.encode(content, eos=True)
+                    batch.append(content)
+
+                    if len(batch) < TOKENIZE_BATCH_SIZE:
+                        continue
+
+                    tokens_batch = tokenizer.encode_batch(batch, eos=True)
+                    batch = []
 
                     row_idx += 1
-
-                    if goes_to_val:
-                        val_token_buffer.extend(tokens)
-                        if len(val_token_buffer) >= TOKEN_BUFFER_SIZE:
-                            _flush_token_buffer(val_token_buffer, val_file)
-                            # update progress bar
-                            progress_queue.put(SetProgressMessage(task_id, row_idx))
-                    else:
-                        train_token_buffer.extend(tokens)
-                        if len(train_token_buffer) >= TOKEN_BUFFER_SIZE:
-                            _flush_token_buffer(train_token_buffer, train_file)
-                            # update progress bar
-                            progress_queue.put(SetProgressMessage(task_id, row_idx))
+                    for tokens in tokens_batch:
+                        goes_to_val = np.random.random() < 0.01
+                        if goes_to_val:
+                            val_token_buffer.extend(tokens)
+                            if len(val_token_buffer) >= TOKEN_BUFFER_SIZE:
+                                _flush_token_buffer(val_token_buffer, val_file)
+                                # update progress bar
+                                progress_queue.put(SetProgressMessage(task_id, row_idx))
+                        else:
+                            train_token_buffer.extend(tokens)
+                            if len(train_token_buffer) >= TOKEN_BUFFER_SIZE:
+                                _flush_token_buffer(train_token_buffer, train_file)
+                                # update progress bar
+                                progress_queue.put(SetProgressMessage(task_id, row_idx))
 
                 _flush_token_buffer(train_token_buffer, train_file)
                 _flush_token_buffer(val_token_buffer, val_file)

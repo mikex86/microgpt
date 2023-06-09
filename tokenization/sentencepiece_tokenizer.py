@@ -3,11 +3,10 @@ from typing import List
 
 from sentencepiece import SentencePieceProcessor
 
-from tokenization.tokenizer import TerminatedTokenizer
+from tokenization.tokenizer import TerminatedTokenizer, BatchTokenizer
 
 
-class SentencePieceTokenizer(TerminatedTokenizer):
-
+class SentencePieceTokenizer(TerminatedTokenizer, BatchTokenizer):
     def __init__(self, model_path: str):
         # reload tokenizer
         assert os.path.isfile(model_path), model_path
@@ -31,6 +30,21 @@ class SentencePieceTokenizer(TerminatedTokenizer):
 
     def decode(self, t: List[int]) -> str:
         return self.sp_model.decode(t)
+
+    def encode_batch(self, texts: List[str], bos: bool = False, eos: bool = False) -> List[List[int]]:
+        assert type(texts) is list
+
+        if bos:
+            for i in range(len(texts)):
+                texts[i] = self.sp_model.bos_id() + texts[i]
+        if eos:
+            for i in range(len(texts)):
+                texts[i] = texts[i] + self.sp_model.eos_id()
+        return self.sp_model.encode(texts)
+
+    def decode_batch(self, tokens: List[List[int]], bos: bool = False, eos: bool = False) -> List[str]:
+        assert type(tokens) is list
+        return self.sp_model.decode(tokens)
 
     @property
     def vocab_size(self) -> int:
