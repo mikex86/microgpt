@@ -261,9 +261,9 @@ def main():
             progress_queues.append(progress_queue)
             results.append(executor.submit(process_parquet_url, (parquet_url, progress_queue)))
 
-        with Live(progress_table, refresh_per_second=10):
+        with Live(progress_table, refresh_per_second=1):
             while True:
-                time.sleep(0.25)
+                time.sleep(0.05)
                 for progress_queue in progress_queues:
                     try:
                         new_message = progress_queue.get(block=False)
