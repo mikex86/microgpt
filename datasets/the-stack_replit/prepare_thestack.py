@@ -160,6 +160,7 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
                 for row in streamer:
                     content = row['content']
                     batch.append(content)
+                    row_idx += 1
 
                     if len(batch) < TOKENIZE_BATCH_SIZE:
                         continue
@@ -167,7 +168,6 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
                     tokens_batch = tokenizer.encode_batch(batch, eos=True)
                     batch = []
 
-                    row_idx += 1
                     for tokens in tokens_batch:
                         goes_to_val = np.random.random() < 0.01
                         if goes_to_val:
