@@ -47,6 +47,8 @@ class ProcessPoolExecutor:
                 process.start()
                 self.running_processes.append(process)
                 self.process_to_function_arg_bundle_map[process] = task
+            else:
+                time.sleep(0.25)
 
     def submit(self, function: callable, args: tuple = None) -> ProcessExecutionResult:
         function_arg_bundle = (function, args)
