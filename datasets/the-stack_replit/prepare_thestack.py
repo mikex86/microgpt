@@ -130,6 +130,7 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
             buffer = BytesIO()
 
             for chunk in response.iter_content(chunk_size=65536):
+                progress_queue.put(SetProgressMessage(download_task_id, buffer.tell()))
                 buffer.write(chunk)
 
             buffer.seek(0)
