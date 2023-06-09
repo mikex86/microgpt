@@ -162,7 +162,7 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
                     batch.append(content)
                     row_idx += 1
 
-                    if len(batch) < TOKENIZE_BATCH_SIZE:
+                    if len(batch) < TOKENIZE_BATCH_SIZE and row_idx != n_rows:
                         continue
 
                     tokens_batch = tokenizer.encode_batch(batch, eos=True)
@@ -218,7 +218,8 @@ def main():
     print(f"Downloading {len(parquet_urls)} parquet files")
 
     # multiprocessing
-    num_workers = multiprocessing.cpu_count()
+    #num_workers = multiprocessing.cpu_count()
+    num_workers = 1
 
     tasks = {}
 
