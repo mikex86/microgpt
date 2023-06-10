@@ -185,6 +185,7 @@ def process_parquet_url(parquet_url: str, progress_queue: multiprocessing.Queue)
 
                 _flush_token_buffer(train_token_buffer, train_file)
                 _flush_token_buffer(val_token_buffer, val_file)
+                progress_queue.put(SetProgressMessage(task_id, n_rows))
 
         print(f"Finished processing {train_file_path}")
         return train_file_path, val_file_path
@@ -262,9 +263,9 @@ def main():
 
         with Live(progress_table, refresh_per_second=1):
             while True:
-                time.sleep(0.01)
+                time.sleep(0.001)
                 for progress_queue in progress_queues:
-                    while True:
+                    for i in range(10):
                         try:
                             new_message = progress_queue.get(block=False)
                         except Empty:
